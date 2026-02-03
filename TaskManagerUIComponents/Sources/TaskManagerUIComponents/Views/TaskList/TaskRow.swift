@@ -35,7 +35,7 @@ public struct TaskRow: View {
                 }
                 .buttonStyle(.plain)
 
-                // Task Info
+                // Task Info (title, notes, photos)
                 VStack(alignment: .leading, spacing: 8) {
                     // Title
                     Text(task.title)
@@ -58,6 +58,16 @@ public struct TaskRow: View {
                 }
 
                 Spacer()
+
+                // Priority flag (always visible, aligned to right edge)
+                Button(action: cyclePriority) {
+                    Image(systemName: "flag.fill")
+                        .font(.system(size: 13))
+                        .foregroundStyle(priorityColor(currentPriority))
+                        .frame(width: 28, height: 28)
+                        .background(.ultraThinMaterial, in: Circle())
+                }
+                .buttonStyle(.plain)
             }
 
             // Bottom Row: Metadata (left) + Action Buttons (right, when selected)
@@ -97,9 +107,6 @@ public struct TaskRow: View {
                             .frame(height: 20)
                         ActionButton(icon: "pencil") { showEditSheet = true }
                         ActionButton(icon: "trash") {}
-                        // Priority button (last, rightmost)
-                        ActionButton(icon: "flag.fill") { cyclePriority() }
-                            .foregroundStyle(priorityColor(currentPriority))
                     }
                     .transition(.opacity.combined(with: .move(edge: .trailing)))
                 }
