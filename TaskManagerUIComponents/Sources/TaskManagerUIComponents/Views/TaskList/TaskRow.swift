@@ -6,10 +6,21 @@ public struct TaskRow: View {
     let isSelected: Bool
     @State private var isExpanded = false
     @State private var showEditSheet = false
+    @State private var currentPriority: TaskItem.Priority
 
     public init(task: TaskItem, isSelected: Bool) {
         self.task = task
         self.isSelected = isSelected
+        self._currentPriority = State(initialValue: task.priority)
+    }
+
+    private func cyclePriority() {
+        switch currentPriority {
+        case .none: currentPriority = .low
+        case .low: currentPriority = .medium
+        case .medium: currentPriority = .high
+        case .high: currentPriority = .none
+        }
     }
 
     public var body: some View {
@@ -25,7 +36,7 @@ public struct TaskRow: View {
                 .buttonStyle(.plain)
 
                 // Task Info
-                VStack(alignment: .leading, spacing: 4) {
+                VStack(alignment: .leading, spacing: 8) {
                     Text(task.title)
                         .font(.system(size: 13))
                         .foregroundStyle(task.isCompleted ? .secondary : .primary)
@@ -37,6 +48,11 @@ public struct TaskRow: View {
                             .font(.system(size: 11))
                             .foregroundStyle(.secondary)
                             .lineLimit(isExpanded ? nil : 1)
+                    }
+
+                    // Photos thumbnail strip
+                    if !task.photos.isEmpty {
+                        PhotoThumbnailStrip(photos: task.photos)
                     }
 
                     // Tags
@@ -65,18 +81,17 @@ public struct TaskRow: View {
                 Spacer()
 
                 // Priority Indicator
-                PriorityIndicator(priority: task.priority)
+                PriorityIndicator(priority: currentPriority)
             }
 
             // Action Buttons (only when selected)
             if isSelected {
                 HStack(spacing: 12) {
-                    ActionButton(icon: "bubble.left.and.bubble.right") {}
                     ActionButton(icon: "paperclip") {}
+                    ActionButton(icon: "flag.fill") { cyclePriority() }
                     Divider()
                         .frame(height: 20)
                     ActionButton(icon: "pencil") { showEditSheet = true }
-                    ActionButton(icon: "flag") {}
                     ActionButton(icon: "trash") {}
                 }
                 .transition(.opacity.combined(with: .move(edge: .top)))

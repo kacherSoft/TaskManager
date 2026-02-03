@@ -11,6 +11,7 @@ public struct TaskItem: Identifiable, Sendable {
     public let hasReminder: Bool
     public let dueDate: Date?
     public let tags: [String]
+    public let photos: [URL]
 
     public enum Priority: Sendable {
         case high, medium, low, none
@@ -24,7 +25,8 @@ public struct TaskItem: Identifiable, Sendable {
         priority: Priority,
         hasReminder: Bool,
         dueDate: Date?,
-        tags: [String]
+        tags: [String],
+        photos: [URL] = []
     ) {
         self.title = title
         self.notes = notes
@@ -34,6 +36,7 @@ public struct TaskItem: Identifiable, Sendable {
         self.hasReminder = hasReminder
         self.dueDate = dueDate
         self.tags = tags
+        self.photos = photos
     }
 
     public nonisolated(unsafe) static let sampleTasks = [
