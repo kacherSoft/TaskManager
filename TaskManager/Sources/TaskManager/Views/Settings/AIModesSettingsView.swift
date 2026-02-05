@@ -1,33 +1,237 @@
 import SwiftUI
+import SwiftData
 
 struct AIModesSettingsView: View {
+    @Environment(\.modelContext) private var modelContext
+    @Query(sort: \AIModeModel.sortOrder) private var modes: [AIModeModel]
+    
+    @State private var selectedMode: AIModeModel?
+    @State private var showAddSheet = false
+    @State private var editingMode: AIModeModel?
+    
     var body: some View {
-        VStack(spacing: 20) {
-            Spacer()
+        VStack(spacing: 0) {
+            List(selection: $selectedMode) {
+                ForEach(modes) { mode in
+                    ModeRow(mode: mode)
+                        .tag(mode)
+                        .contextMenu {
+                            Button("Edit") {
+                                editingMode = mode
+                            }
+                            if !mode.isBuiltIn {
+                                Button("Delete", role: .destructive) {
+                                    deleteMode(mode)
+                                }
+                            }
+                        }
+                }
+                .onMove(perform: moveMode)
+            }
+            .listStyle(.inset)
             
-            Image(systemName: "sparkles")
-                .font(.system(size: 56))
-                .foregroundStyle(.secondary)
+            Divider()
             
-            Text("AI Modes")
-                .font(.title2)
-                .fontWeight(.semibold)
-            
-            Text("Coming in Phase 3")
-                .font(.headline)
-                .foregroundStyle(.purple)
-                .padding(.horizontal, 16)
-                .padding(.vertical, 8)
-                .background(.purple.opacity(0.1), in: Capsule())
-            
-            Text("Create custom AI enhancement modes\nwith your own prompts.")
-                .font(.body)
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
-            
-            Spacer()
+            HStack {
+                Button(action: { showAddSheet = true }) {
+                    Image(systemName: "plus")
+                }
+                
+                Button(action: deleteSelected) {
+                    Image(systemName: "minus")
+                }
+                .disabled(selectedMode == nil || selectedMode?.isBuiltIn == true)
+                
+                Spacer()
+                
+                Text("\(modes.count) modes")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            .padding(8)
+            .background(.bar)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .padding(24)
+        .sheet(isPresented: $showAddSheet) {
+            ModeEditorSheet(mode: nil) { name, prompt, provider, model in
+                addMode(name: name, prompt: prompt, provider: provider, model: model)
+            }
+        }
+        .sheet(item: $editingMode) { mode in
+            ModeEditorSheet(mode: mode) { name, prompt, provider, model in
+                updateMode(mode, name: name, prompt: prompt, provider: provider, model: model)
+            }
+        }
+    }
+    
+    private func addMode(name: String, prompt: String, provider: AIProviderType, model: String) {
+        let mode = AIModeModel(name: name, systemPrompt: prompt, provider: provider, modelName: model, isBuiltIn: false)
+        mode.sortOrder = modes.count
+        modelContext.insert(mode)
+        try? modelContext.save()
+    }
+    
+    private func updateMode(_ mode: AIModeModel, name: String, prompt: String, provider: AIProviderType, model: String) {
+        mode.name = name
+        mode.systemPrompt = prompt
+        mode.provider = provider
+        mode.modelName = model
+        try? modelContext.save()
+    }
+    
+    private func deleteMode(_ mode: AIModeModel) {
+        modelContext.delete(mode)
+        try? modelContext.save()
+    }
+    
+    private func deleteSelected() {
+        guard let mode = selectedMode, !mode.isBuiltIn else { return }
+        deleteMode(mode)
+        selectedMode = nil
+    }
+    
+    private func moveMode(from source: IndexSet, to destination: Int) {
+        var orderedModes = modes
+        orderedModes.move(fromOffsets: source, toOffset: destination)
+        
+        for (index, mode) in orderedModes.enumerated() {
+            mode.sortOrder = index
+        }
+        try? modelContext.save()
+    }
+}
+
+private struct ModeRow: View {
+    let mode: AIModeModel
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack {
+                Text(mode.name)
+                    .font(.body)
+                
+                if mode.isBuiltIn {
+                    Text("Built-in")
+                        .font(.caption2)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(.blue.opacity(0.2))
+                        .foregroundStyle(.blue)
+                        .clipShape(Capsule())
+                }
+                
+                Spacer()
+                
+                Text(mode.provider.displayName)
+                    .font(.caption2)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(.secondary.opacity(0.2))
+                    .clipShape(Capsule())
+            }
+            
+            HStack {
+                Text(mode.modelName)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                
+                Text("·")
+                    .foregroundStyle(.tertiary)
+                
+                Text(mode.systemPrompt)
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
+                    .lineLimit(1)
+            }
+        }
+        .padding(.vertical, 4)
+    }
+}
+
+private struct ModeEditorSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    
+    let mode: AIModeModel?
+    let onSave: (String, String, AIProviderType, String) -> Void
+    
+    @State private var name = ""
+    @State private var systemPrompt = ""
+    @State private var selectedProvider: AIProviderType = .gemini
+    @State private var selectedModel = ""
+    
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack {
+                Text(mode == nil ? "Add Mode" : "Edit Mode")
+                    .font(.headline)
+                Spacer()
+                Button("Cancel") { dismiss() }
+                    .keyboardShortcut(.escape)
+            }
+            .padding()
+            
+            Divider()
+            
+            Form {
+                TextField("Name", text: $name)
+                
+                Section("AI Provider") {
+                    Picker("Provider", selection: $selectedProvider) {
+                        ForEach(AIProviderType.allCases, id: \.self) { provider in
+                            Text(provider.displayName).tag(provider)
+                        }
+                    }
+                    .onChange(of: selectedProvider) { _, newValue in
+                        if !newValue.availableModels.contains(selectedModel) {
+                            selectedModel = newValue.defaultModel
+                        }
+                    }
+                    
+                    Picker("Model", selection: $selectedModel) {
+                        ForEach(selectedProvider.availableModels, id: \.self) { model in
+                            Text(model).tag(model)
+                        }
+                    }
+                }
+                
+                Section("System Prompt") {
+                    TextEditor(text: $systemPrompt)
+                        .font(.body)
+                        .frame(minHeight: 120)
+                        .scrollContentBackground(.hidden)
+                        .padding(8)
+                        .background(.background)
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 8)
+                                .stroke(.quaternary)
+                        )
+                }
+            }
+            .formStyle(.grouped)
+            
+            Divider()
+            
+            HStack {
+                Spacer()
+                Button("Save") {
+                    onSave(name, systemPrompt, selectedProvider, selectedModel)
+                    dismiss()
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(name.trimmingCharacters(in: .whitespaces).isEmpty || systemPrompt.trimmingCharacters(in: .whitespaces).isEmpty)
+            }
+            .padding()
+        }
+        .frame(width: 500, height: 480)
+        .onAppear {
+            if let mode {
+                name = mode.name
+                systemPrompt = mode.systemPrompt
+                selectedProvider = mode.provider
+                selectedModel = mode.modelName
+            } else {
+                selectedModel = selectedProvider.defaultModel
+            }
+        }
     }
 }

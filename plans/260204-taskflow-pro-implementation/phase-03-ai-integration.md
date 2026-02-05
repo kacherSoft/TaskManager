@@ -1,6 +1,6 @@
 # Phase 3: AI Integration
 
-**Priority:** HIGH | **Status:** Pending | **Effort:** 1.5 weeks
+**Priority:** HIGH | **Status:** Complete | **Effort:** 1.5 weeks
 
 ## Overview
 
@@ -699,19 +699,19 @@ func seedDefaultAIModes(container: ModelContainer) {
 
 ## Todo List
 
-- [ ] Add GoogleGenerativeAI to Package.swift
-- [ ] Create AIProvider protocol
-- [ ] Create KeychainService for secure API key storage
-- [ ] Implement GeminiProvider with SDK
-- [ ] Implement ZAIProvider with URLSession
-- [ ] Create AIService orchestration layer
-- [ ] Create EnhanceMePanel (NSPanel)
-- [ ] Create EnhanceMeView with two-column diff
-- [ ] Implement mode cycling (CMD+Shift+M)
-- [ ] Seed default AI modes on first launch
-- [ ] Wire up WindowManager.showEnhanceMe()
-- [ ] Create AIConfigurationView for settings
-- [ ] Create AIModeManagerView for custom modes
+- [x] Add GoogleGenerativeAI to Package.swift
+- [x] Create AIProviderProtocol
+- [x] Create KeychainService for secure API key storage
+- [x] Implement GeminiProvider with SDK
+- [x] Implement ZAIProvider with URLSession
+- [x] Create AIService orchestration layer
+- [x] Create EnhanceMePanel (NSPanel)
+- [x] Create EnhanceMeView with two-column diff
+- [x] Implement mode cycling (CMD+Shift+M)
+- [x] Seed default AI modes on first launch (already done in Phase 1)
+- [x] Wire up WindowManager.showEnhanceMe()
+- [x] Create AIConfigSettingsView for settings
+- [x] Create AIModesSettingsView for custom modes
 - [ ] Test Gemini integration
 - [ ] Test z.ai integration
 - [ ] Test error handling (timeout, rate limit, invalid key)

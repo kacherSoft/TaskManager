@@ -1,0 +1,78 @@
+import Foundation
+import Security
+
+final class KeychainService: Sendable {
+    static let shared = KeychainService()
+    private let service = "com.taskflowpro.api-keys"
+    
+    enum Key: String, Sendable {
+        case geminiAPIKey = "gemini-api-key"
+        case zaiAPIKey = "zai-api-key"
+    }
+    
+    private init() {}
+    
+    func save(_ value: String, for key: Key) throws {
+        guard let data = value.data(using: .utf8) else {
+            throw KeychainError.encodingFailed
+        }
+        
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: key.rawValue,
+            kSecValueData as String: data
+        ]
+        
+        SecItemDelete(query as CFDictionary)
+        
+        let status = SecItemAdd(query as CFDictionary, nil)
+        guard status == errSecSuccess else {
+            throw KeychainError.saveFailed(status)
+        }
+    }
+    
+    func get(_ key: Key) -> String? {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: key.rawValue,
+            kSecReturnData as String: true,
+            kSecMatchLimit as String: kSecMatchLimitOne
+        ]
+        
+        var result: AnyObject?
+        let status = SecItemCopyMatching(query as CFDictionary, &result)
+        
+        guard status == errSecSuccess, let data = result as? Data else {
+            return nil
+        }
+        
+        return String(data: data, encoding: .utf8)
+    }
+    
+    func delete(_ key: Key) {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: key.rawValue
+        ]
+        SecItemDelete(query as CFDictionary)
+    }
+    
+    func hasKey(_ key: Key) -> Bool {
+        get(key) != nil
+    }
+}
+
+enum KeychainError: LocalizedError {
+    case saveFailed(OSStatus)
+    case encodingFailed
+    
+    var errorDescription: String? {
+        switch self {
+        case .saveFailed(let status): return "Failed to save to keychain (status: \(status))"
+        case .encodingFailed: return "Failed to encode value"
+        }
+    }
+}

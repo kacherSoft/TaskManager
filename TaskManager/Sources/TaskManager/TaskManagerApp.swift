@@ -58,7 +58,7 @@ struct TaskManagerApp: App {
         menuBarController = MenuBarController()
         
         // Initialize shortcut manager (registers shortcuts)
-        _ = ShortcutManager.shared
+        ShortcutManager.shared.configure(modelContainer: container)
         
         // Pass container to app delegate for settings (after all inits)
         appDelegate.modelContainer = container

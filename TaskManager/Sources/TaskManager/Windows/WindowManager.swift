@@ -9,6 +9,7 @@ final class WindowManager: ObservableObject {
     
     private var quickEntryPanel: QuickEntryPanel?
     private var settingsWindow: SettingsWindow?
+    private var enhanceMePanel: EnhanceMePanel?
     private var modelContainer: ModelContainer?
     
     private init() {}
@@ -17,9 +18,19 @@ final class WindowManager: ObservableObject {
         self.modelContainer = modelContainer
     }
     
+    // MARK: - Close All Floating Windows
+    
+    private func closeAllFloatingWindows() {
+        hideQuickEntry()
+        hideSettings()
+        hideEnhanceMe()
+    }
+    
     // MARK: - Quick Entry
     
     func showQuickEntry() {
+        closeAllFloatingWindows()
+        
         if quickEntryPanel == nil {
             quickEntryPanel = QuickEntryPanel()
         }
@@ -85,6 +96,8 @@ final class WindowManager: ObservableObject {
     // MARK: - Settings
     
     func showSettings() {
+        closeAllFloatingWindows()
+        
         if settingsWindow == nil {
             guard let container = modelContainer else { return }
             settingsWindow = SettingsWindow(modelContainer: container)
@@ -99,11 +112,30 @@ final class WindowManager: ObservableObject {
         settingsWindow?.orderOut(nil)
     }
     
-    // MARK: - Enhance Me (Phase 3)
+    // MARK: - Enhance Me
     
-    func showEnhanceMe() {
-        // Phase 3 implementation
-        // For now, just show main window
-        showMainWindow()
+    func showEnhanceMe(withText text: String = "") {
+        closeAllFloatingWindows()
+        
+        if enhanceMePanel == nil {
+            enhanceMePanel = EnhanceMePanel()
+        }
+        
+        guard let panel = enhanceMePanel, let container = modelContainer else { return }
+        
+        let view = EnhanceMeView(
+            initialText: text,
+            onDismiss: { [weak self] in self?.hideEnhanceMe() }
+        )
+        .modelContainer(container)
+        
+        panel.setContent(view)
+        panel.center()
+        panel.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
+    }
+    
+    func hideEnhanceMe() {
+        enhanceMePanel?.orderOut(nil)
     }
 }

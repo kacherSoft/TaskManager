@@ -1,13 +1,20 @@
 import KeyboardShortcuts
 import AppKit
+import SwiftData
 
 @MainActor
 final class ShortcutManager: ObservableObject {
     static let shared = ShortcutManager()
     
+    private var modelContainer: ModelContainer?
+    
     private init() {
         registerDefaultShortcuts()
         setupHandlers()
+    }
+    
+    func configure(modelContainer: ModelContainer) {
+        self.modelContainer = modelContainer
     }
     
     private func registerDefaultShortcuts() {
@@ -59,7 +66,6 @@ final class ShortcutManager: ObservableObject {
     }
     
     func showEnhanceMe() {
-        // Phase 3 implementation
         WindowManager.shared.showEnhanceMe()
     }
     
@@ -68,7 +74,9 @@ final class ShortcutManager: ObservableObject {
     }
     
     func cycleAIMode() {
-        // Phase 3 implementation
+        guard let container = modelContainer else { return }
+        let context = container.mainContext
+        AIService.shared.cycleMode(in: context)
     }
     
     static func resetAllToDefaults() {
