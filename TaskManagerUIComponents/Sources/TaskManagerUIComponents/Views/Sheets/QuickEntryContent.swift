@@ -87,6 +87,6 @@ public struct QuickEntryContent: View {
         } message: {
             Text("Create task \"\(taskTitle.trimmingCharacters(in: .whitespacesAndNewlines))\"?")
         }
-        .frame(minWidth: 400, minHeight: 450)
+        .frame(minWidth: 480, minHeight: 600)
     }
 }
