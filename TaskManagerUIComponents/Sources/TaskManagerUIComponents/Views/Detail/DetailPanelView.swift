@@ -9,9 +9,12 @@ public struct DetailPanelView: View {
     @Binding var showNewTaskSheet: Bool
     
     let onToggleComplete: ((TaskItem) -> Void)?
-    let onEdit: ((TaskItem, String, String, Date?, Bool, TaskItem.Priority, [String]) -> Void)?
+    let onEdit: ((TaskItem, String, String, Date?, Bool, TaskItem.Priority, [String], [URL]) -> Void)?
     let onDelete: ((TaskItem) -> Void)?
     let onPriorityChange: ((TaskItem, TaskItem.Priority) -> Void)?
+    let onAddPhotos: ((TaskItem, [URL]) -> Void)?
+    let onPickPhotos: ((@escaping ([URL]) -> Void) -> Void)?
+    let onDeletePhoto: ((URL) -> Void)?
 
     public init(
         selectedSidebarItem: SidebarItem?,
@@ -29,6 +32,9 @@ public struct DetailPanelView: View {
         self.onEdit = nil
         self.onDelete = nil
         self.onPriorityChange = nil
+        self.onAddPhotos = nil
+        self.onPickPhotos = nil
+        self.onDeletePhoto = nil
     }
     
     public init(
@@ -38,9 +44,12 @@ public struct DetailPanelView: View {
         searchText: Binding<String>,
         showNewTaskSheet: Binding<Bool>,
         onToggleComplete: @escaping (TaskItem) -> Void,
-        onEdit: @escaping (TaskItem, String, String, Date?, Bool, TaskItem.Priority, [String]) -> Void,
+        onEdit: @escaping (TaskItem, String, String, Date?, Bool, TaskItem.Priority, [String], [URL]) -> Void,
         onDelete: @escaping (TaskItem) -> Void,
-        onPriorityChange: @escaping (TaskItem, TaskItem.Priority) -> Void
+        onPriorityChange: @escaping (TaskItem, TaskItem.Priority) -> Void,
+        onAddPhotos: @escaping (TaskItem, [URL]) -> Void = { _, _ in },
+        onPickPhotos: ((@escaping ([URL]) -> Void) -> Void)? = nil,
+        onDeletePhoto: ((URL) -> Void)? = nil
     ) {
         self.selectedSidebarItem = selectedSidebarItem
         self._selectedTask = selectedTask
@@ -51,6 +60,9 @@ public struct DetailPanelView: View {
         self.onEdit = onEdit
         self.onDelete = onDelete
         self.onPriorityChange = onPriorityChange
+        self.onAddPhotos = onAddPhotos
+        self.onPickPhotos = onPickPhotos
+        self.onDeletePhoto = onDeletePhoto
     }
 
     public var body: some View {
@@ -63,14 +75,17 @@ public struct DetailPanelView: View {
                 )
 
                 // Task List
-                if let onToggleComplete, let onEdit, let onDelete, let onPriorityChange {
+                if let onToggleComplete, let onEdit, let onDelete, let onPriorityChange, let onAddPhotos {
                     TaskListView(
                         tasks: filteredTasks,
                         selectedTask: $selectedTask,
                         onToggleComplete: onToggleComplete,
                         onEdit: onEdit,
                         onDelete: onDelete,
-                        onPriorityChange: onPriorityChange
+                        onPriorityChange: onPriorityChange,
+                        onAddPhotos: onAddPhotos,
+                        onPickPhotos: onPickPhotos,
+                        onDeletePhoto: onDeletePhoto
                     )
                 } else {
                     TaskListView(
@@ -112,7 +127,8 @@ public struct DetailPanelView: View {
             switch selectedItem {
             case .allTasks: break
             case .today: result = result.filter { $0.isToday }
-            case .upcoming: result = result.filter { !$0.isToday }
+            case .upcoming: result = result.filter { !$0.isToday && !$0.isCompleted }
+            case .inProgress: result = result.filter { $0.isInProgress }
             case .completed: result = result.filter { $0.isCompleted }
             default: break
             }

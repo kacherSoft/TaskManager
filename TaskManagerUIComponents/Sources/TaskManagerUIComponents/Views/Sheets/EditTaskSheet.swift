@@ -17,9 +17,12 @@ public struct EditTaskSheet: View {
     @State private var showSaveConfirmation = false
     @State private var showTagConfirmation = false
     @State private var pendingTag = ""
+    @State private var photos: [URL]
     
-    private let onSave: ((String, String, Date?, Bool, TaskItem.Priority, [String]) -> Void)?
+    private let onSave: ((String, String, Date?, Bool, TaskItem.Priority, [String], [URL]) -> Void)?
     private let onDelete: (() -> Void)?
+    private let onPickPhotos: ((@escaping ([URL]) -> Void) -> Void)?
+    private let onDeletePhoto: ((URL) -> Void)?
 
     public init(task: TaskItem, isPresented: Binding<Bool>) {
         self.task = task
@@ -31,15 +34,20 @@ public struct EditTaskSheet: View {
         _hasReminder = State(initialValue: task.hasReminder)
         _selectedPriority = State(initialValue: task.priority)
         _tags = State(initialValue: task.tags)
+        _photos = State(initialValue: task.photos)
         self.onSave = nil
         self.onDelete = nil
+        self.onPickPhotos = nil
+        self.onDeletePhoto = nil
     }
     
     public init(
         task: TaskItem,
         isPresented: Binding<Bool>,
-        onSave: @escaping (String, String, Date?, Bool, TaskItem.Priority, [String]) -> Void,
-        onDelete: @escaping () -> Void
+        onSave: @escaping (String, String, Date?, Bool, TaskItem.Priority, [String], [URL]) -> Void,
+        onDelete: @escaping () -> Void,
+        onPickPhotos: ((@escaping ([URL]) -> Void) -> Void)? = nil,
+        onDeletePhoto: ((URL) -> Void)? = nil
     ) {
         self.task = task
         self._isPresented = isPresented
@@ -50,8 +58,11 @@ public struct EditTaskSheet: View {
         _hasReminder = State(initialValue: task.hasReminder)
         _selectedPriority = State(initialValue: task.priority)
         _tags = State(initialValue: task.tags)
+        _photos = State(initialValue: task.photos)
         self.onSave = onSave
         self.onDelete = onDelete
+        self.onPickPhotos = onPickPhotos
+        self.onDeletePhoto = onDeletePhoto
     }
     
     private func requestAddTag() {
@@ -85,7 +96,8 @@ public struct EditTaskSheet: View {
             hasDate ? selectedDate : nil,
             hasReminder,
             selectedPriority,
-            tags
+            tags,
+            photos
         )
         isPresented = false
     }
@@ -163,9 +175,41 @@ public struct EditTaskSheet: View {
                         })
                     }
                 }
+                
+                Section("Attachments") {
+                    HStack {
+                        Button {
+                            onPickPhotos? { urls in
+                                photos.append(contentsOf: urls)
+                            }
+                        } label: {
+                            Label("Add Photos", systemImage: "photo.on.rectangle.angled")
+                        }
+                        .buttonStyle(.borderless)
+                        
+                        Spacer()
+                        
+                        if !photos.isEmpty {
+                            Text("\(photos.count) photo\(photos.count == 1 ? "" : "s")")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    
+                    if !photos.isEmpty {
+                        PhotoThumbnailStrip(
+                            photos: photos,
+                            onRemove: { url in
+                                photos.removeAll { $0 == url }
+                                onDeletePhoto?(url)
+                            }
+                        )
+                    }
+                }
             }
             .formStyle(.grouped)
             .navigationTitle("Edit Task")
+            .toolbarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { isPresented = false }

@@ -6,9 +6,12 @@ public struct TaskListView: View {
     @Binding var selectedTask: TaskItem?
     
     let onToggleComplete: ((TaskItem) -> Void)?
-    let onEdit: ((TaskItem, String, String, Date?, Bool, TaskItem.Priority, [String]) -> Void)?
+    let onEdit: ((TaskItem, String, String, Date?, Bool, TaskItem.Priority, [String], [URL]) -> Void)?
     let onDelete: ((TaskItem) -> Void)?
     let onPriorityChange: ((TaskItem, TaskItem.Priority) -> Void)?
+    let onAddPhotos: ((TaskItem, [URL]) -> Void)?
+    let onPickPhotos: ((@escaping ([URL]) -> Void) -> Void)?
+    let onDeletePhoto: ((URL) -> Void)?
 
     public init(tasks: [TaskItem], selectedTask: Binding<TaskItem?>) {
         self.tasks = tasks
@@ -17,15 +20,21 @@ public struct TaskListView: View {
         self.onEdit = nil
         self.onDelete = nil
         self.onPriorityChange = nil
+        self.onAddPhotos = nil
+        self.onPickPhotos = nil
+        self.onDeletePhoto = nil
     }
     
     public init(
         tasks: [TaskItem],
         selectedTask: Binding<TaskItem?>,
         onToggleComplete: @escaping (TaskItem) -> Void,
-        onEdit: @escaping (TaskItem, String, String, Date?, Bool, TaskItem.Priority, [String]) -> Void,
+        onEdit: @escaping (TaskItem, String, String, Date?, Bool, TaskItem.Priority, [String], [URL]) -> Void,
         onDelete: @escaping (TaskItem) -> Void,
-        onPriorityChange: @escaping (TaskItem, TaskItem.Priority) -> Void
+        onPriorityChange: @escaping (TaskItem, TaskItem.Priority) -> Void,
+        onAddPhotos: @escaping (TaskItem, [URL]) -> Void = { _, _ in },
+        onPickPhotos: ((@escaping ([URL]) -> Void) -> Void)? = nil,
+        onDeletePhoto: ((URL) -> Void)? = nil
     ) {
         self.tasks = tasks
         self._selectedTask = selectedTask
@@ -33,22 +42,28 @@ public struct TaskListView: View {
         self.onEdit = onEdit
         self.onDelete = onDelete
         self.onPriorityChange = onPriorityChange
+        self.onAddPhotos = onAddPhotos
+        self.onPickPhotos = onPickPhotos
+        self.onDeletePhoto = onDeletePhoto
     }
 
     public var body: some View {
         ScrollView {
             LazyVStack(spacing: 8) {
                 ForEach(tasks) { task in
-                    if let onToggleComplete, let onEdit, let onDelete, let onPriorityChange {
+                    if let onToggleComplete, let onEdit, let onDelete, let onPriorityChange, let onAddPhotos {
                         TaskRow(
                             task: task,
                             isSelected: selectedTask?.id == task.id,
-                            onToggleComplete: { onToggleComplete(task) },
-                            onEdit: { title, notes, dueDate, hasReminder, priority, tags in
-                                onEdit(task, title, notes, dueDate, hasReminder, priority, tags)
+                            onStatusChange: { _ in onToggleComplete(task) },
+                            onEdit: { title, notes, dueDate, hasReminder, priority, tags, photos in
+                                onEdit(task, title, notes, dueDate, hasReminder, priority, tags, photos)
                             },
                             onDelete: { onDelete(task) },
-                            onPriorityChange: { priority in onPriorityChange(task, priority) }
+                            onPriorityChange: { priority in onPriorityChange(task, priority) },
+                            onAddPhotos: { urls in onAddPhotos(task, urls) },
+                            onPickPhotos: onPickPhotos,
+                            onDeletePhoto: onDeletePhoto
                         )
                         .onTapGesture { selectedTask = task }
                     } else {

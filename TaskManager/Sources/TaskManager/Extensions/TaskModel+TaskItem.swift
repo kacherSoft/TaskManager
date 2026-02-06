@@ -7,14 +7,32 @@ extension TaskModel {
             id: id,
             title: title,
             notes: taskDescription,
-            isCompleted: isCompleted,
+            status: status.toUIComponentStatus(),
             isToday: isToday,
             priority: priority.toUIComponentPriority(),
             hasReminder: hasReminder,
             dueDate: dueDate,
             tags: tags,
-            photos: photos.compactMap { URL(string: $0) }
+            photos: photos.map { URL(fileURLWithPath: $0) }
         )
+    }
+}
+
+extension TaskStatus {
+    func toUIComponentStatus() -> TaskItem.Status {
+        switch self {
+        case .todo: return .todo
+        case .inProgress: return .inProgress
+        case .completed: return .completed
+        }
+    }
+    
+    static func from(_ status: TaskItem.Status) -> TaskStatus {
+        switch status {
+        case .todo: return .todo
+        case .inProgress: return .inProgress
+        case .completed: return .completed
+        }
     }
 }
 

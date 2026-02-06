@@ -10,14 +10,22 @@ final class TaskModel {
     var reminderDate: Date?
     var priority: TaskPriority
     var tags: [String]
-    var isCompleted: Bool
-    var completedDate: Date?
+    var statusRaw: String = TaskStatus.todo.rawValue
+    var completedAt: Date?
     var isToday: Bool
     var hasReminder: Bool
     var photos: [String]
     var createdAt: Date
     var updatedAt: Date
     var sortOrder: Int
+    
+    var status: TaskStatus {
+        get { TaskStatus(rawValue: statusRaw) ?? .todo }
+        set { statusRaw = newValue.rawValue }
+    }
+    
+    var isCompleted: Bool { status == .completed }
+    var isInProgress: Bool { status == .inProgress }
     
     init(
         title: String,
@@ -26,6 +34,7 @@ final class TaskModel {
         reminderDate: Date? = nil,
         priority: TaskPriority = .medium,
         tags: [String] = [],
+        status: TaskStatus = .todo,
         isToday: Bool = false,
         hasReminder: Bool = false,
         photos: [String] = []
@@ -37,7 +46,7 @@ final class TaskModel {
         self.reminderDate = reminderDate
         self.priority = priority
         self.tags = tags
-        self.isCompleted = false
+        self.statusRaw = status.rawValue
         self.isToday = isToday
         self.hasReminder = hasReminder
         self.photos = photos
@@ -46,20 +55,51 @@ final class TaskModel {
         self.sortOrder = 0
     }
     
-    func markComplete() {
-        isCompleted = true
-        completedDate = Date()
+    func setStatus(_ newStatus: TaskStatus) {
+        status = newStatus
+        if newStatus == .completed {
+            completedAt = Date()
+        } else {
+            completedAt = nil
+        }
         updatedAt = Date()
     }
     
+    func cycleStatus() {
+        switch status {
+        case .todo:
+            setStatus(.inProgress)
+        case .inProgress:
+            setStatus(.completed)
+        case .completed:
+            setStatus(.todo)
+        }
+    }
+    
+    func markComplete() {
+        setStatus(.completed)
+    }
+    
     func markIncomplete() {
-        isCompleted = false
-        completedDate = nil
-        updatedAt = Date()
+        setStatus(.todo)
     }
     
     func touch() {
         updatedAt = Date()
+    }
+}
+
+enum TaskStatus: String, Codable, CaseIterable, Sendable {
+    case todo
+    case inProgress
+    case completed
+    
+    var displayName: String {
+        switch self {
+        case .todo: return "Todo"
+        case .inProgress: return "In Progress"
+        case .completed: return "Completed"
+        }
     }
 }
 

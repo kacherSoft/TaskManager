@@ -10,6 +10,10 @@ public struct TaskFormContent: View {
     @Binding var selectedPriority: TaskItem.Priority
     @Binding var tags: [String]
     @Binding var showValidationError: Bool
+    @Binding var photos: [URL]
+    
+    let onPickPhotos: ((@escaping ([URL]) -> Void) -> Void)?
+    let onDeletePhoto: ((URL) -> Void)?
     
     @State private var newTag = ""
     @State private var showTagConfirmation = false
@@ -23,7 +27,10 @@ public struct TaskFormContent: View {
         hasReminder: Binding<Bool>,
         selectedPriority: Binding<TaskItem.Priority>,
         tags: Binding<[String]>,
-        showValidationError: Binding<Bool>
+        showValidationError: Binding<Bool>,
+        photos: Binding<[URL]> = .constant([]),
+        onPickPhotos: ((@escaping ([URL]) -> Void) -> Void)? = nil,
+        onDeletePhoto: ((URL) -> Void)? = nil
     ) {
         self._taskTitle = taskTitle
         self._taskNotes = taskNotes
@@ -33,6 +40,9 @@ public struct TaskFormContent: View {
         self._selectedPriority = selectedPriority
         self._tags = tags
         self._showValidationError = showValidationError
+        self._photos = photos
+        self.onPickPhotos = onPickPhotos
+        self.onDeletePhoto = onDeletePhoto
     }
     
     private func requestAddTag() {
@@ -128,6 +138,37 @@ public struct TaskFormContent: View {
                     })
                 }
             }
+            
+            Section("Attachments") {
+                HStack {
+                    Button {
+                        onPickPhotos? { urls in
+                            photos.append(contentsOf: urls)
+                        }
+                    } label: {
+                        Label("Add Photos", systemImage: "photo.on.rectangle.angled")
+                    }
+                    .buttonStyle(.borderless)
+                    
+                    Spacer()
+                    
+                    if !photos.isEmpty {
+                        Text("\(photos.count) photo\(photos.count == 1 ? "" : "s")")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                
+                if !photos.isEmpty {
+                    PhotoThumbnailStrip(
+                        photos: photos,
+                        onRemove: { url in
+                            photos.removeAll { $0 == url }
+                            onDeletePhoto?(url)
+                        }
+                    )
+                }
+            }
         }
         .formStyle(.grouped)
         .confirmationDialog(
@@ -144,5 +185,6 @@ public struct TaskFormContent: View {
         } message: {
             Text("Create new tag \"\(pendingTag)\" and add it to this task?")
         }
+
     }
 }

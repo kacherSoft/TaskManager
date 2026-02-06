@@ -180,22 +180,39 @@ public struct PhotoThumbnail: View {
 // MARK: - Photo Thumbnail Strip
 public struct PhotoThumbnailStrip: View {
     let photos: [URL]
+    let onRemove: ((URL) -> Void)?
     @State private var selectedIndex = 0
     @State private var showViewer = false
 
-    public init(photos: [URL]) {
+    public init(photos: [URL], onRemove: ((URL) -> Void)? = nil) {
         self.photos = photos
+        self.onRemove = onRemove
     }
 
     public var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
                 ForEach(0..<photos.count, id: \.self) { index in
-                    PhotoThumbnail(url: photos[index])
-                        .onTapGesture {
-                            selectedIndex = index
-                            showViewer = true
+                    ZStack(alignment: .topTrailing) {
+                        PhotoThumbnail(url: photos[index])
+                            .onTapGesture {
+                                selectedIndex = index
+                                showViewer = true
+                            }
+                        
+                        if onRemove != nil {
+                            Button {
+                                onRemove?(photos[index])
+                            } label: {
+                                Image(systemName: "xmark.circle.fill")
+                                    .font(.system(size: 16))
+                                    .foregroundStyle(.white)
+                                    .background(Circle().fill(.black.opacity(0.6)))
+                            }
+                            .buttonStyle(.plain)
+                            .offset(x: 4, y: -4)
                         }
+                    }
                 }
             }
             .padding(.horizontal, 16)

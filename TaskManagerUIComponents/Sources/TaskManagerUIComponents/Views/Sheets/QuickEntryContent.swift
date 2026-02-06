@@ -9,18 +9,25 @@ public struct QuickEntryContent: View {
     @State private var hasReminder = false
     @State private var selectedPriority: TaskItem.Priority = .none
     @State private var tags: [String] = []
+    @State private var photos: [URL] = []
     @State private var showValidationError = false
     @State private var showCreateConfirmation = false
     
     public var onCancel: () -> Void
-    public var onCreate: (String, String, Date?, Bool, TaskItem.Priority, [String]) -> Void
+    public var onCreate: (String, String, Date?, Bool, TaskItem.Priority, [String], [URL]) -> Void
+    public var onPickPhotos: ((@escaping ([URL]) -> Void) -> Void)?
+    public var onDeletePhoto: ((URL) -> Void)?
 
     public init(
         onCancel: @escaping () -> Void,
-        onCreate: @escaping (String, String, Date?, Bool, TaskItem.Priority, [String]) -> Void
+        onCreate: @escaping (String, String, Date?, Bool, TaskItem.Priority, [String], [URL]) -> Void,
+        onPickPhotos: ((@escaping ([URL]) -> Void) -> Void)? = nil,
+        onDeletePhoto: ((URL) -> Void)? = nil
     ) {
         self.onCancel = onCancel
         self.onCreate = onCreate
+        self.onPickPhotos = onPickPhotos
+        self.onDeletePhoto = onDeletePhoto
     }
     
     private func validateAndCreate() {
@@ -38,7 +45,8 @@ public struct QuickEntryContent: View {
             hasDate ? selectedDate : nil,
             hasReminder,
             selectedPriority,
-            tags
+            tags,
+            photos
         )
     }
 
@@ -53,7 +61,10 @@ public struct QuickEntryContent: View {
                 hasReminder: $hasReminder,
                 selectedPriority: $selectedPriority,
                 tags: $tags,
-                showValidationError: $showValidationError
+                showValidationError: $showValidationError,
+                photos: $photos,
+                onPickPhotos: onPickPhotos,
+                onDeletePhoto: onDeletePhoto
             )
             
             Divider()

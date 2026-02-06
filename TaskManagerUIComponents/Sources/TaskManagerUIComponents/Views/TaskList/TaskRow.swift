@@ -5,40 +5,80 @@ public struct TaskRow: View {
     let task: TaskItem
     let isSelected: Bool
     let onToggleComplete: (() -> Void)?
-    let onEdit: ((String, String, Date?, Bool, TaskItem.Priority, [String]) -> Void)?
+    let onStatusChange: ((TaskItem.Status) -> Void)?
+    let onEdit: ((String, String, Date?, Bool, TaskItem.Priority, [String], [URL]) -> Void)?
     let onDelete: (() -> Void)?
     let onPriorityChange: ((TaskItem.Priority) -> Void)?
+    let onAddPhotos: (([URL]) -> Void)?
+    let onPickPhotos: ((@escaping ([URL]) -> Void) -> Void)?
+    let onDeletePhoto: ((URL) -> Void)?
     
     @State private var isExpanded = false
     @State private var showEditSheet = false
     @State private var showDeleteConfirmation = false
     @State private var currentPriority: TaskItem.Priority
+    @State private var currentStatus: TaskItem.Status
 
     public init(task: TaskItem, isSelected: Bool) {
         self.task = task
         self.isSelected = isSelected
         self._currentPriority = State(initialValue: task.priority)
+        self._currentStatus = State(initialValue: task.status)
         self.onToggleComplete = nil
+        self.onStatusChange = nil
         self.onEdit = nil
         self.onDelete = nil
         self.onPriorityChange = nil
+        self.onAddPhotos = nil
+        self.onPickPhotos = nil
+        self.onDeletePhoto = nil
     }
     
     public init(
         task: TaskItem,
         isSelected: Bool,
         onToggleComplete: @escaping () -> Void,
-        onEdit: @escaping (String, String, Date?, Bool, TaskItem.Priority, [String]) -> Void,
+        onEdit: @escaping (String, String, Date?, Bool, TaskItem.Priority, [String], [URL]) -> Void,
         onDelete: @escaping () -> Void,
         onPriorityChange: @escaping (TaskItem.Priority) -> Void
     ) {
         self.task = task
         self.isSelected = isSelected
         self._currentPriority = State(initialValue: task.priority)
+        self._currentStatus = State(initialValue: task.status)
         self.onToggleComplete = onToggleComplete
+        self.onStatusChange = nil
         self.onEdit = onEdit
         self.onDelete = onDelete
         self.onPriorityChange = onPriorityChange
+        self.onAddPhotos = nil
+        self.onPickPhotos = nil
+        self.onDeletePhoto = nil
+    }
+    
+    public init(
+        task: TaskItem,
+        isSelected: Bool,
+        onStatusChange: @escaping (TaskItem.Status) -> Void,
+        onEdit: @escaping (String, String, Date?, Bool, TaskItem.Priority, [String], [URL]) -> Void,
+        onDelete: @escaping () -> Void,
+        onPriorityChange: @escaping (TaskItem.Priority) -> Void,
+        onAddPhotos: @escaping ([URL]) -> Void,
+        onPickPhotos: ((@escaping ([URL]) -> Void) -> Void)? = nil,
+        onDeletePhoto: ((URL) -> Void)? = nil
+    ) {
+        self.task = task
+        self.isSelected = isSelected
+        self._currentPriority = State(initialValue: task.priority)
+        self._currentStatus = State(initialValue: task.status)
+        self.onToggleComplete = nil
+        self.onStatusChange = onStatusChange
+        self.onEdit = onEdit
+        self.onDelete = onDelete
+        self.onPriorityChange = onPriorityChange
+        self.onAddPhotos = onAddPhotos
+        self.onPickPhotos = onPickPhotos
+        self.onDeletePhoto = onDeletePhoto
     }
 
     private func cyclePriority() {
@@ -50,18 +90,45 @@ public struct TaskRow: View {
         }
         onPriorityChange?(currentPriority)
     }
-
+    
+    private func cycleStatus() {
+        switch currentStatus {
+        case .todo: currentStatus = .inProgress
+        case .inProgress: currentStatus = .completed
+        case .completed: currentStatus = .todo
+        }
+        onStatusChange?(currentStatus)
+        onToggleComplete?()
+    }
+    
+    private var statusIcon: String {
+        switch currentStatus {
+        case .todo: return "circle"
+        case .inProgress: return "play.circle"
+        case .completed: return "checkmark.circle.fill"
+        }
+    }
+    
+    private var statusColor: Color {
+        switch currentStatus {
+        case .todo: return .secondary
+        case .inProgress: return .orange
+        case .completed: return .blue
+        }
+    }
+    
     public var body: some View {
         VStack(spacing: 12) {
             // Main Row Content
             HStack(alignment: .top, spacing: 16) {
-                // Checkbox
-                Button(action: { onToggleComplete?() }) {
-                    Image(systemName: task.isCompleted ? "checkmark.circle.fill" : "circle")
+                // Status Checkbox (cycles: todo -> inProgress -> completed -> todo)
+                Button(action: cycleStatus) {
+                    Image(systemName: statusIcon)
                         .font(.system(size: 20))
-                        .foregroundStyle(task.isCompleted ? .blue : .secondary)
+                        .foregroundStyle(statusColor)
                 }
                 .buttonStyle(.plain)
+                .help("Click to cycle status: Todo → In Progress → Completed")
 
                 // Task Info (title, notes, photos)
                 VStack(alignment: .leading, spacing: 8) {
@@ -130,7 +197,7 @@ public struct TaskRow: View {
                 // Right side: Action Buttons (only when selected)
                 if isSelected {
                     HStack(spacing: 12) {
-                        ActionButton(icon: "paperclip") {}
+                        ActionButton(icon: "paperclip") { onAddPhotos?([]) }
                         Divider()
                             .frame(height: 20)
                         ActionButton(icon: "pencil") { showEditSheet = true }
@@ -156,13 +223,18 @@ public struct TaskRow: View {
         .onChange(of: task.priority) { _, newPriority in
             currentPriority = newPriority
         }
+        .onChange(of: task.status) { _, newStatus in
+            currentStatus = newStatus
+        }
         .sheet(isPresented: $showEditSheet) {
             if let onEdit, let onDelete {
                 EditTaskSheet(
                     task: task,
                     isPresented: $showEditSheet,
                     onSave: onEdit,
-                    onDelete: onDelete
+                    onDelete: onDelete,
+                    onPickPhotos: onPickPhotos,
+                    onDeletePhoto: onDeletePhoto
                 )
             } else {
                 EditTaskSheet(task: task, isPresented: $showEditSheet)

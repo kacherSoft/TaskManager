@@ -10,21 +10,30 @@ public struct NewTaskSheet: View {
     @State private var hasReminder = false
     @State private var selectedPriority: TaskItem.Priority = .none
     @State private var tags: [String] = []
+    @State private var photos: [URL] = []
     @State private var showValidationError = false
     @State private var showCreateConfirmation = false
     
-    private let onCreate: ((String, String, Date?, Bool, TaskItem.Priority, [String]) -> Void)?
+    private let onCreate: ((String, String, Date?, Bool, TaskItem.Priority, [String], [URL]) -> Void)?
+    let onPickPhotos: ((@escaping ([URL]) -> Void) -> Void)?
+    let onDeletePhoto: ((URL) -> Void)?
 
     public init(isPresented: Binding<Bool>) {
         self._isPresented = isPresented
         self.onCreate = nil
+        self.onPickPhotos = nil
+        self.onDeletePhoto = nil
     }
     
     public init(
         isPresented: Binding<Bool>,
-        onCreate: @escaping (String, String, Date?, Bool, TaskItem.Priority, [String]) -> Void
+        onPickPhotos: ((@escaping ([URL]) -> Void) -> Void)? = nil,
+        onDeletePhoto: ((URL) -> Void)? = nil,
+        onCreate: @escaping (String, String, Date?, Bool, TaskItem.Priority, [String], [URL]) -> Void
     ) {
         self._isPresented = isPresented
+        self.onPickPhotos = onPickPhotos
+        self.onDeletePhoto = onDeletePhoto
         self.onCreate = onCreate
     }
     
@@ -43,7 +52,8 @@ public struct NewTaskSheet: View {
             hasDate ? selectedDate : nil,
             hasReminder,
             selectedPriority,
-            tags
+            tags,
+            photos
         )
         isPresented = false
     }
@@ -58,9 +68,13 @@ public struct NewTaskSheet: View {
                 hasReminder: $hasReminder,
                 selectedPriority: $selectedPriority,
                 tags: $tags,
-                showValidationError: $showValidationError
+                showValidationError: $showValidationError,
+                photos: $photos,
+                onPickPhotos: onPickPhotos,
+                onDeletePhoto: onDeletePhoto
             )
             .navigationTitle("New Task")
+            .toolbarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { isPresented = false }

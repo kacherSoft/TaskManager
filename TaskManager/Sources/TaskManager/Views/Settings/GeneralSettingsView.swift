@@ -97,10 +97,61 @@ struct GeneralSettingsView: View {
                 .padding(20)
                 .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
                 
+                // Data Section
+                VStack(alignment: .leading, spacing: 16) {
+                    Text("Data")
+                        .font(.headline)
+                        .padding(.horizontal, 20)
+                        .padding(.top, 16)
+                    
+                    HStack(spacing: 12) {
+                        Button {
+                            DataExportService.shared.exportTasks(context: modelContext)
+                        } label: {
+                            Label("Export Tasks", systemImage: "square.and.arrow.up")
+                        }
+                        
+                        Button {
+                            DataExportService.shared.importTasks(context: modelContext)
+                        } label: {
+                            Label("Import Tasks", systemImage: "square.and.arrow.down")
+                        }
+                    }
+                    .padding(.horizontal, 20)
+                    
+                    Divider()
+                        .padding(.horizontal, 20)
+                    
+                    Button(role: .destructive) {
+                        showDeleteConfirmation = true
+                    } label: {
+                        Label("Delete All Tasks", systemImage: "trash")
+                            .foregroundStyle(.red)
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.horizontal, 20)
+                    .padding(.bottom, 16)
+                }
+                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
+                
                 Spacer()
             }
             .padding(24)
         }
+        .confirmationDialog("Delete All Tasks?", isPresented: $showDeleteConfirmation) {
+            Button("Delete All", role: .destructive) {
+                deleteAllTasks()
+            }
+            Button("Cancel", role: .cancel) { }
+        } message: {
+            Text("This action cannot be undone.")
+        }
+    }
+    
+    @State private var showDeleteConfirmation = false
+    
+    private func deleteAllTasks() {
+        try? modelContext.delete(model: TaskModel.self)
     }
 }
 

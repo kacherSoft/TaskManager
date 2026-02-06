@@ -609,21 +609,21 @@ struct TaskManagerApp: App {
 
 ## Todo List
 
-- [ ] Create SettingsView with tab navigation
-- [ ] Create GeneralSettingsView
-- [ ] Complete AIConfigurationView (from Phase 3)
-- [ ] Create ShortcutsSettingsView with KeyboardShortcuts.Recorder
-- [ ] Complete AIModeManagerView (from Phase 3)
-- [ ] Implement always-on-top toggle
-- [ ] Create NotificationService
-- [ ] Register notification categories with actions
-- [ ] Create DataExportService
-- [ ] Implement JSON export
-- [ ] Implement JSON import
-- [ ] Create OnboardingView wizard
-- [ ] Apply liquid glass materials consistently
+- [x] Create SettingsView with tab navigation
+- [x] Create GeneralSettingsView
+- [x] Complete AIConfigurationView (from Phase 3)
+- [x] Create ShortcutsSettingsView with KeyboardShortcuts.Recorder
+- [x] Complete AIModeManagerView (from Phase 3)
+- [x] Implement always-on-top toggle
+- [x] Create NotificationService
+- [x] Register notification categories with actions
+- [x] Create DataExportService
+- [x] Implement JSON export
+- [x] Implement JSON import
+- [x] Create OnboardingView wizard
+- [x] Apply liquid glass materials consistently
 - [ ] Add micro-interactions and animations
-- [ ] Wire Settings scene in TaskManagerApp
+- [x] Wire Settings scene in TaskManagerApp
 - [ ] Test onboarding flow
 - [ ] Test notification scheduling and actions
 - [ ] Test export/import round-trip

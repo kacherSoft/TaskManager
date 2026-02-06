@@ -18,7 +18,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
     
     func applicationDidBecomeActive(_ notification: Notification) {
-        if let window = NSApp.windows.first(where: { !($0 is NSPanel) }) {
+        if let window = NSApp.windows.first(where: { $0.canBecomeKey && !($0 is NSPanel) }) {
             window.makeKeyAndOrderFront(nil)
         }
     }
@@ -83,6 +83,7 @@ struct ContentView: View {
     @State private var showNewTaskSheet = false
     @State private var searchText = ""
     @State private var columnVisibility: NavigationSplitViewVisibility = .all
+    @State private var showOnboarding = !UserDefaults.standard.bool(forKey: "hasCompletedOnboarding")
 
     var body: some View {
         NavigationSplitView(columnVisibility: $columnVisibility) {
@@ -98,30 +99,48 @@ struct ContentView: View {
                 onToggleComplete: { taskItem in
                     toggleComplete(taskItem: taskItem)
                 },
-                onEdit: { taskItem, title, notes, dueDate, hasReminder, priority, tags in
-                    updateTask(taskItem: taskItem, title: title, notes: notes, dueDate: dueDate, hasReminder: hasReminder, priority: priority, tags: tags)
+                onEdit: { taskItem, title, notes, dueDate, hasReminder, priority, tags, photos in
+                    updateTask(taskItem: taskItem, title: title, notes: notes, dueDate: dueDate, hasReminder: hasReminder, priority: priority, tags: tags, photos: photos)
                 },
                 onDelete: { taskItem in
                     deleteTask(taskItem: taskItem)
                 },
                 onPriorityChange: { taskItem, priority in
                     updatePriority(taskItem: taskItem, priority: priority)
+                },
+                onAddPhotos: { taskItem, urls in
+                    addPhotos(taskItem: taskItem, urls: urls)
+                },
+                onPickPhotos: { completion in
+                    PhotoStorageService.shared.pickPhotos(completion: completion)
+                },
+                onDeletePhoto: { url in
+                    PhotoStorageService.shared.deletePhoto(at: url.path)
                 }
             )
         }
         .navigationSplitViewStyle(.balanced)
         .background(WindowActivator())
         .sheet(isPresented: $showNewTaskSheet) {
-            NewTaskSheet(isPresented: $showNewTaskSheet) { title, notes, dueDate, hasReminder, priority, tags in
+            NewTaskSheet(
+                isPresented: $showNewTaskSheet,
+                onPickPhotos: { completion in
+                    PhotoStorageService.shared.pickPhotos(completion: completion)
+                }
+            ) { title, notes, dueDate, hasReminder, priority, tags, photos in
                 createTask(
                     title: title,
                     notes: notes,
                     dueDate: dueDate,
                     hasReminder: hasReminder,
                     priority: priority,
-                    tags: tags
+                    tags: tags,
+                    photos: photos
                 )
             }
+        }
+        .sheet(isPresented: $showOnboarding) {
+            OnboardingView()
         }
     }
     
@@ -135,7 +154,8 @@ struct ContentView: View {
         dueDate: Date?,
         hasReminder: Bool,
         priority: TaskItem.Priority,
-        tags: [String]
+        tags: [String],
+        photos: [URL] = []
     ) {
         let task = TaskModel(
             title: title,
@@ -143,7 +163,8 @@ struct ContentView: View {
             dueDate: dueDate,
             priority: TaskPriority.from(priority),
             tags: tags,
-            hasReminder: hasReminder
+            hasReminder: hasReminder,
+            photos: photos.map { $0.absoluteString }
         )
         modelContext.insert(task)
         try? modelContext.save()
@@ -155,11 +176,13 @@ struct ContentView: View {
     
     private func toggleComplete(taskItem: TaskItem) {
         guard let task = findTaskModel(for: taskItem) else { return }
-        if task.isCompleted {
-            task.markIncomplete()
-        } else {
-            task.markComplete()
-        }
+        task.cycleStatus()
+        try? modelContext.save()
+    }
+    
+    private func updateStatus(taskItem: TaskItem, status: TaskItem.Status) {
+        guard let task = findTaskModel(for: taskItem) else { return }
+        task.setStatus(TaskStatus.from(status))
         try? modelContext.save()
     }
     
@@ -170,7 +193,8 @@ struct ContentView: View {
         dueDate: Date?,
         hasReminder: Bool,
         priority: TaskItem.Priority,
-        tags: [String]
+        tags: [String],
+        photos: [URL] = []
     ) {
         guard let task = findTaskModel(for: taskItem) else { return }
         task.title = title
@@ -179,6 +203,7 @@ struct ContentView: View {
         task.hasReminder = hasReminder
         task.priority = TaskPriority.from(priority)
         task.tags = tags
+        task.photos = photos.map { $0.path }
         task.touch()
         try? modelContext.save()
     }
@@ -195,5 +220,15 @@ struct ContentView: View {
         task.priority = TaskPriority.from(priority)
         task.touch()
         try? modelContext.save()
+    }
+    
+    private func addPhotos(taskItem: TaskItem, urls: [URL]) {
+        guard let task = findTaskModel(for: taskItem) else { return }
+        PhotoStorageService.shared.pickPhotos { selectedURLs in
+            let storedPaths = PhotoStorageService.shared.storePhotos(selectedURLs)
+            task.photos.append(contentsOf: storedPaths)
+            task.touch()
+            try? self.modelContext.save()
+        }
     }
 }

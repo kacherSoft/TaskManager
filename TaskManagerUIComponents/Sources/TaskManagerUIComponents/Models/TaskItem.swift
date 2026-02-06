@@ -5,18 +5,52 @@ public struct TaskItem: Identifiable, Sendable {
     public let id: UUID
     public let title: String
     public let notes: String
-    public var isCompleted: Bool
+    public var status: Status
     public var isToday: Bool
     public let priority: Priority
     public let hasReminder: Bool
     public let dueDate: Date?
     public let tags: [String]
     public let photos: [URL]
+    
+    public enum Status: String, CaseIterable, Sendable {
+        case todo = "Todo"
+        case inProgress = "In Progress"
+        case completed = "Completed"
+    }
 
     public enum Priority: Sendable {
         case high, medium, low, none
     }
+    
+    public var isCompleted: Bool { status == .completed }
+    public var isInProgress: Bool { status == .inProgress }
 
+    public init(
+        id: UUID = UUID(),
+        title: String,
+        notes: String,
+        status: Status = .todo,
+        isToday: Bool,
+        priority: Priority,
+        hasReminder: Bool,
+        dueDate: Date?,
+        tags: [String],
+        photos: [URL] = []
+    ) {
+        self.id = id
+        self.title = title
+        self.notes = notes
+        self.status = status
+        self.isToday = isToday
+        self.priority = priority
+        self.hasReminder = hasReminder
+        self.dueDate = dueDate
+        self.tags = tags
+        self.photos = photos
+    }
+    
+    // Legacy initializer for compatibility
     public init(
         id: UUID = UUID(),
         title: String,
@@ -32,7 +66,7 @@ public struct TaskItem: Identifiable, Sendable {
         self.id = id
         self.title = title
         self.notes = notes
-        self.isCompleted = isCompleted
+        self.status = isCompleted ? .completed : .todo
         self.isToday = isToday
         self.priority = priority
         self.hasReminder = hasReminder

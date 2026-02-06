@@ -39,9 +39,12 @@ final class WindowManager: ObservableObject {
         
         let view = QuickEntryWrapper(
             onDismiss: { [weak self] in self?.hideQuickEntry() },
-            onCreate: { [weak self] title, notes, dueDate, hasReminder, priority, tags in
-                self?.createTask(title: title, notes: notes, dueDate: dueDate, hasReminder: hasReminder, priority: priority, tags: tags)
+            onCreate: { [weak self] title, notes, dueDate, hasReminder, priority, tags, photos in
+                self?.createTask(title: title, notes: notes, dueDate: dueDate, hasReminder: hasReminder, priority: priority, tags: tags, photos: photos)
                 self?.hideQuickEntry()
+            },
+            onPickPhotos: { completion in
+                PhotoStorageService.shared.pickPhotos(completion: completion)
             }
         )
         .modelContainer(container)
@@ -56,7 +59,7 @@ final class WindowManager: ObservableObject {
         quickEntryPanel?.orderOut(nil)
     }
     
-    private func createTask(title: String, notes: String, dueDate: Date?, hasReminder: Bool, priority: TaskItem.Priority, tags: [String]) {
+    private func createTask(title: String, notes: String, dueDate: Date?, hasReminder: Bool, priority: TaskItem.Priority, tags: [String], photos: [URL] = []) {
         guard let container = modelContainer else { return }
         let context = container.mainContext
         
@@ -66,7 +69,8 @@ final class WindowManager: ObservableObject {
             dueDate: dueDate,
             priority: TaskPriority.from(priority),
             tags: tags,
-            hasReminder: hasReminder
+            hasReminder: hasReminder,
+            photos: photos.map { $0.absoluteString }
         )
         context.insert(task)
         try? context.save()
@@ -82,8 +86,8 @@ final class WindowManager: ObservableObject {
     }
     
     func getMainWindow() -> NSWindow? {
-        NSApp.windows.first(where: { $0.identifier?.rawValue == "main-window" || $0.title == "Task Manager" })
-        ?? NSApp.windows.first(where: { !($0 is NSPanel) && $0.isVisible })
+        NSApp.windows.first(where: { ($0.identifier?.rawValue == "main-window" || $0.title == "Task Manager") && $0.canBecomeKey })
+        ?? NSApp.windows.first(where: { $0.canBecomeKey && !($0 is NSPanel) && $0.isVisible })
     }
     
     // MARK: - Always on Top
