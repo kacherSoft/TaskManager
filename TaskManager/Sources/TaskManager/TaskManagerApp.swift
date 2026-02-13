@@ -71,11 +71,15 @@ struct TaskManagerApp: App {
         .modelContainer(container)
         .windowStyle(.hiddenTitleBar)
         .defaultSize(width: 1000, height: 700)
+        .commands {
+            CommandGroup(replacing: .newItem) {}
+        }
     }
 }
 
 struct ContentView: View {
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.openWindow) private var openWindow
     @Query(sort: \TaskModel.createdAt, order: .reverse) private var taskModels: [TaskModel]
     
     @State private var selectedSidebarItem: SidebarItem? = .allTasks
@@ -142,7 +146,9 @@ struct ContentView: View {
         .sheet(isPresented: $showOnboarding) {
             OnboardingView()
         }
-        .background(LocalShortcutHandler())
+        .onAppear {
+            WindowManager.shared.openWindowAction = openWindow
+        }
     }
     
     private var taskItems: [TaskItem] {
@@ -244,21 +250,3 @@ struct ContentView: View {
     }
 }
 
-struct LocalShortcutHandler: NSViewRepresentable {
-    func makeNSView(context: Context) -> NSView { LocalShortcutNSView() }
-    func updateNSView(_ nsView: NSView, context: Context) {}
-}
-
-final class LocalShortcutNSView: KeyEventMonitorNSView {
-    override func handleKeyEvent(_ event: NSEvent) -> NSEvent? {
-        if event.matchesShortcut(.mainWindow) {
-            ShortcutManager.shared.showMainWindow()
-            return nil
-        }
-        if event.matchesShortcut(.settings) {
-            ShortcutManager.shared.showSettings()
-            return nil
-        }
-        return event
-    }
-}

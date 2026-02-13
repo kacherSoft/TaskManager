@@ -11,6 +11,7 @@ final class WindowManager: ObservableObject {
     private var settingsWindow: SettingsWindow?
     private var enhanceMePanel: EnhanceMePanel?
     private var modelContainer: ModelContainer?
+    var openWindowAction: OpenWindowAction?
     
     private init() {}
     
@@ -84,7 +85,7 @@ final class WindowManager: ObservableObject {
         if let window = getMainWindow() {
             window.makeKeyAndOrderFront(nil)
         } else {
-            NSApp.sendAction(Selector(("newWindowForTab:")), to: nil, from: nil)
+            openWindowAction?(id: "main-window")
         }
     }
     

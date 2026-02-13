@@ -41,6 +41,16 @@ struct ShortcutsSettingsView: View {
                         icon: "plus.circle"
                     )
                     
+                    Divider()
+                        .padding(.horizontal, 20)
+                    
+                    ShortcutRow(
+                        name: .mainWindow,
+                        title: "Show Task List",
+                        description: "Focus the main task list window",
+                        icon: "macwindow"
+                    )
+                    
                     // Local Shortcuts
                     Text("Local Shortcuts")
                         .font(.subheadline)
@@ -55,16 +65,6 @@ struct ShortcutsSettingsView: View {
                         .foregroundStyle(.tertiary)
                         .padding(.horizontal, 20)
                         .padding(.bottom, 8)
-                    
-                    ShortcutRow(
-                        name: .mainWindow,
-                        title: "Show Task List",
-                        description: "Focus the main task list window",
-                        icon: "macwindow"
-                    )
-                    
-                    Divider()
-                        .padding(.horizontal, 20)
                     
                     ShortcutRow(
                         name: .settings,

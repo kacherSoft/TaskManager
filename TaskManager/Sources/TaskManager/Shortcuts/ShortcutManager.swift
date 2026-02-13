@@ -7,10 +7,12 @@ final class ShortcutManager: ObservableObject {
     static let shared = ShortcutManager()
     
     private var modelContainer: ModelContainer?
+    private nonisolated(unsafe) var localMonitor: Any?
     
     private init() {
         registerDefaultShortcuts()
         setupHandlers()
+        setupLocalMonitor()
     }
     
     func configure(modelContainer: ModelContainer) {
@@ -27,14 +29,13 @@ final class ShortcutManager: ObservableObject {
         if KeyboardShortcuts.getShortcut(for: .enhanceMe) == nil {
             KeyboardShortcuts.setShortcut(.init(.e, modifiers: [.command, .shift]), for: .enhanceMe)
         }
-        // Local (stored for customization, no global handler)
         if KeyboardShortcuts.getShortcut(for: .mainWindow) == nil {
-            KeyboardShortcuts.setShortcut(.init(.t, modifiers: [.command]), for: .mainWindow)
+            KeyboardShortcuts.setShortcut(.init(.t, modifiers: [.command, .shift]), for: .mainWindow)
         }
+        // Local (stored for customization)
         if KeyboardShortcuts.getShortcut(for: .settings) == nil {
             KeyboardShortcuts.setShortcut(.init(.comma, modifiers: [.command]), for: .settings)
         }
-
     }
     
     private func setupHandlers() {
@@ -45,6 +46,27 @@ final class ShortcutManager: ObservableObject {
         KeyboardShortcuts.onKeyUp(for: .enhanceMe) { [weak self] in
             self?.showEnhanceMe()
         }
+        
+        KeyboardShortcuts.onKeyUp(for: .mainWindow) { [weak self] in
+            self?.showMainWindow()
+        }
+    }
+    
+    // MARK: - Local Shortcuts (app-wide when focused)
+    
+    private func setupLocalMonitor() {
+        localMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            guard let self else { return event }
+            return self.handleLocalShortcut(event)
+        }
+    }
+    
+    private func handleLocalShortcut(_ event: NSEvent) -> NSEvent? {
+        if event.matchesShortcut(.settings) {
+            showSettings()
+            return nil
+        }
+        return event
     }
     
     // MARK: - Actions
@@ -75,7 +97,7 @@ final class ShortcutManager: ObservableObject {
         KeyboardShortcuts.reset(.quickEntry, .enhanceMe, .mainWindow, .settings)
         KeyboardShortcuts.setShortcut(.init(.n, modifiers: [.command, .shift]), for: .quickEntry)
         KeyboardShortcuts.setShortcut(.init(.e, modifiers: [.command, .shift]), for: .enhanceMe)
-        KeyboardShortcuts.setShortcut(.init(.t, modifiers: [.command]), for: .mainWindow)
+        KeyboardShortcuts.setShortcut(.init(.t, modifiers: [.command, .shift]), for: .mainWindow)
         KeyboardShortcuts.setShortcut(.init(.comma, modifiers: [.command]), for: .settings)
     }
 }
