@@ -7,6 +7,7 @@ public struct SidebarView: View {
     @Binding var selectedTag: String?
     @Binding var selectedDate: Date?
     @Binding var dateFilterMode: CalendarFilterMode
+    @Binding var selectedPriority: TaskItem.Priority?
     let tasks: [TaskItem]
 
     public init(
@@ -15,6 +16,7 @@ public struct SidebarView: View {
         selectedTag: Binding<String?> = .constant(nil),
         selectedDate: Binding<Date?> = .constant(nil),
         dateFilterMode: Binding<CalendarFilterMode> = .constant(.all),
+        selectedPriority: Binding<TaskItem.Priority?> = .constant(nil),
         tasks: [TaskItem] = []
     ) {
         self._selectedItem = selectedItem
@@ -22,6 +24,7 @@ public struct SidebarView: View {
         self._selectedTag = selectedTag
         self._selectedDate = selectedDate
         self._dateFilterMode = dateFilterMode
+        self._selectedPriority = selectedPriority
         self.tasks = tasks
     }
 
@@ -68,7 +71,43 @@ public struct SidebarView: View {
                                 } else {
                                     selectedTag = tagName
                                     selectedItem = nil
+                                    selectedPriority = nil
                                 }
+                            }
+                        }
+                    }
+                }
+
+                Section("Priority") {
+                    ForEach(priorityFilterOptions, id: \.0) { label, icon, color, priority in
+                        HStack(spacing: 8) {
+                            Image(systemName: icon)
+                                .foregroundStyle(color)
+                                .font(.system(size: 12))
+                                .frame(width: 16)
+
+                            Text(label)
+                                .font(.system(size: 13))
+
+                            Spacer()
+                        }
+                        .padding(.vertical, 4)
+                        .padding(.horizontal, 4)
+                        .contentShape(Rectangle())
+                        .background(
+                            RoundedRectangle(cornerRadius: 6)
+                                .fill(selectedPriority == priority
+                                    ? color.opacity(0.2)
+                                    : Color.clear)
+                        )
+                        .onTapGesture {
+                            if selectedPriority == priority {
+                                selectedPriority = nil
+                            } else {
+                                selectedPriority = priority
+                                selectedItem = nil
+                                selectedTag = nil
+                                selectedDate = nil
                             }
                         }
                     }
@@ -134,6 +173,15 @@ public struct SidebarView: View {
             .padding(.vertical, 8)
         }
         .navigationTitle("Task Manager")
+    }
+
+    private var priorityFilterOptions: [(String, String, Color, TaskItem.Priority)] {
+        [
+            ("High", "flag.fill", .red, .high),
+            ("Medium", "flag.fill", .orange, .medium),
+            ("Low", "flag.fill", .blue, .low),
+            ("None", "flag", .secondary, .none),
+        ]
     }
 
     private var selectedDateHasBothTypes: Bool {

@@ -80,6 +80,7 @@ struct ContentView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.openWindow) private var openWindow
     @Query(sort: \TaskModel.createdAt, order: .reverse) private var taskModels: [TaskModel]
+    @Query private var settings: [SettingsModel]
     
     @State private var selectedSidebarItem: SidebarItem? = .allTasks
     @State private var selectedTask: TaskItem?
@@ -90,6 +91,9 @@ struct ContentView: View {
     @State private var selectedTag: String?
     @State private var selectedDate: Date?
     @State private var dateFilterMode: CalendarFilterMode = .all
+    @State private var selectedPriority: TaskItem.Priority?
+
+    private var currentSettings: SettingsModel? { settings.first }
 
     var body: some View {
         NavigationSplitView(columnVisibility: $columnVisibility) {
@@ -99,6 +103,7 @@ struct ContentView: View {
                 selectedTag: $selectedTag,
                 selectedDate: $selectedDate,
                 dateFilterMode: $dateFilterMode,
+                selectedPriority: $selectedPriority,
                 tasks: taskItems
             )
             .frame(minWidth: 220, idealWidth: 260)
@@ -106,6 +111,7 @@ struct ContentView: View {
                 if newValue != nil {
                     selectedSidebarItem = nil
                     selectedDate = nil
+                    selectedPriority = nil
                 }
             }
             .onChange(of: selectedDate) { _, newValue in
@@ -113,10 +119,19 @@ struct ContentView: View {
                 if newValue != nil {
                     selectedSidebarItem = nil
                     selectedTag = nil
+                    selectedPriority = nil
                 }
             }
             .onChange(of: selectedSidebarItem) { _, newValue in
                 if newValue != nil {
+                    selectedTag = nil
+                    selectedDate = nil
+                    selectedPriority = nil
+                }
+            }
+            .onChange(of: selectedPriority) { _, newValue in
+                if newValue != nil {
+                    selectedSidebarItem = nil
                     selectedTag = nil
                     selectedDate = nil
                 }
@@ -131,11 +146,12 @@ struct ContentView: View {
                 selectedTag: selectedTag,
                 selectedDate: selectedDate,
                 dateFilterMode: dateFilterMode,
+                selectedPriority: selectedPriority,
                 onToggleComplete: { taskItem in
                     toggleComplete(taskItem: taskItem)
                 },
-                onEdit: { taskItem, title, notes, dueDate, hasReminder, priority, tags, photos in
-                    updateTask(taskItem: taskItem, title: title, notes: notes, dueDate: dueDate, hasReminder: hasReminder, priority: priority, tags: tags, photos: photos)
+                onEdit: { taskItem, title, notes, dueDate, hasReminder, duration, priority, tags, photos in
+                    updateTask(taskItem: taskItem, title: title, notes: notes, dueDate: dueDate, hasReminder: hasReminder, reminderDuration: duration, priority: priority, tags: tags, photos: photos)
                 },
                 onDelete: { taskItem in
                     deleteTask(taskItem: taskItem)
@@ -151,6 +167,9 @@ struct ContentView: View {
                 },
                 onDeletePhoto: { url in
                     PhotoStorageService.shared.deletePhoto(at: url.path)
+                },
+                onSetReminder: { taskItem in
+                    toggleReminder(taskItem: taskItem)
                 }
             )
         }
@@ -162,12 +181,13 @@ struct ContentView: View {
                 onPickPhotos: { completion in
                     PhotoStorageService.shared.pickPhotos(completion: completion)
                 }
-            ) { title, notes, dueDate, hasReminder, priority, tags, photos in
+            ) { title, notes, dueDate, hasReminder, duration, priority, tags, photos in
                 createTask(
                     title: title,
                     notes: notes,
                     dueDate: dueDate,
                     hasReminder: hasReminder,
+                    reminderDuration: duration,
                     priority: priority,
                     tags: tags,
                     photos: photos
@@ -198,6 +218,7 @@ struct ContentView: View {
         notes: String,
         dueDate: Date?,
         hasReminder: Bool,
+        reminderDuration: TimeInterval = 1800,
         priority: TaskItem.Priority,
         tags: [String],
         photos: [URL] = []
@@ -207,6 +228,7 @@ struct ContentView: View {
             title: title,
             taskDescription: notes,
             dueDate: dueDate,
+            reminderDuration: reminderDuration,
             priority: TaskPriority.from(priority),
             tags: tags,
             hasReminder: hasReminder,
@@ -238,6 +260,7 @@ struct ContentView: View {
         notes: String,
         dueDate: Date?,
         hasReminder: Bool,
+        reminderDuration: TimeInterval = 1800,
         priority: TaskItem.Priority,
         tags: [String],
         photos: [URL] = []
@@ -247,6 +270,7 @@ struct ContentView: View {
         task.taskDescription = notes
         task.dueDate = dueDate
         task.hasReminder = hasReminder
+        task.reminderDuration = reminderDuration
         task.priority = TaskPriority.from(priority)
         task.tags = tags
         task.photos = PhotoStorageService.shared.normalizeToStoredPaths(photos)
@@ -256,6 +280,7 @@ struct ContentView: View {
     
     private func deleteTask(taskItem: TaskItem) {
         guard let task = findTaskModel(for: taskItem) else { return }
+        NotificationService.shared.cancelReminder(for: task.id)
         modelContext.delete(task)
         try? modelContext.save()
         selectedTask = nil
@@ -264,6 +289,28 @@ struct ContentView: View {
     private func updatePriority(taskItem: TaskItem, priority: TaskItem.Priority) {
         guard let task = findTaskModel(for: taskItem) else { return }
         task.priority = TaskPriority.from(priority)
+        task.touch()
+        try? modelContext.save()
+    }
+    
+    private func toggleReminder(taskItem: TaskItem) {
+        guard let task = findTaskModel(for: taskItem) else { return }
+        
+        if let fireDate = task.reminderFireDate, fireDate > Date() {
+            // Cancel active reminder
+            NotificationService.shared.cancelReminder(for: task.id)
+            task.reminderFireDate = nil
+        } else {
+            // Start reminder timer
+            let soundId = currentSettings?.reminderSoundId ?? "default"
+            task.reminderFireDate = Date().addingTimeInterval(task.reminderDuration)
+            NotificationService.shared.scheduleTimerReminder(
+                for: task.id,
+                title: task.title,
+                duration: task.reminderDuration,
+                soundId: soundId
+            )
+        }
         task.touch()
         try? modelContext.save()
     }
