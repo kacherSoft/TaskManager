@@ -1,5 +1,20 @@
 import SwiftUI
 
+public func tagColor(for text: String) -> Color {
+    let colors: [Color] = [
+        Color(red: 0.5, green: 0.7, blue: 0.9),
+        Color(red: 0.7, green: 0.5, blue: 0.9),
+        Color(red: 0.5, green: 0.9, blue: 0.7),
+        Color(red: 0.9, green: 0.7, blue: 0.5),
+        Color(red: 0.9, green: 0.5, blue: 0.7),
+        Color(red: 0.5, green: 0.9, blue: 0.9),
+    ]
+    let hash = text.unicodeScalars.reduce(UInt(5381)) { h, s in
+        ((h &<< 5) &+ h) &+ UInt(s.value)
+    }
+    return colors[Int(hash % UInt(colors.count))]
+}
+
 // MARK: - Tag Chip Component
 public struct TagChip: View {
     let text: String
@@ -18,18 +33,7 @@ public struct TagChip: View {
         self.onRemove = onRemove
     }
 
-    private var tagColor: Color {
-        let hash = text.hashValue
-        let colors: [Color] = [
-            Color(red: 0.5, green: 0.7, blue: 0.9),
-            Color(red: 0.7, green: 0.5, blue: 0.9),
-            Color(red: 0.5, green: 0.9, blue: 0.7),
-            Color(red: 0.9, green: 0.7, blue: 0.5),
-            Color(red: 0.9, green: 0.5, blue: 0.7),
-            Color(red: 0.5, green: 0.9, blue: 0.9),
-        ]
-        return colors[abs(hash) % colors.count]
-    }
+    private var chipColor: Color { tagColor(for: text) }
 
     public var body: some View {
         HStack(spacing: 4) {
@@ -48,7 +52,7 @@ public struct TagChip: View {
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 3)
-        .background(tagColor.opacity(0.5))
+        .background(chipColor.opacity(0.5))
         .clipShape(RoundedRectangle(cornerRadius: 4))
     }
 }

@@ -18,9 +18,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
     
     func applicationDidBecomeActive(_ notification: Notification) {
-        if let window = NSApp.windows.first(where: { $0.canBecomeKey && !($0 is NSPanel) }) {
-            window.makeKeyAndOrderFront(nil)
-        }
+        // Don't force window to front here - let WindowManager handle it
+        // This prevents fighting with moveToActiveSpace behavior
     }
     
     @MainActor
@@ -88,11 +87,40 @@ struct ContentView: View {
     @State private var searchText = ""
     @State private var columnVisibility: NavigationSplitViewVisibility = .all
     @State private var showOnboarding = !UserDefaults.standard.bool(forKey: "hasCompletedOnboarding")
+    @State private var selectedTag: String?
+    @State private var selectedDate: Date?
+    @State private var dateFilterMode: CalendarFilterMode = .all
 
     var body: some View {
         NavigationSplitView(columnVisibility: $columnVisibility) {
-            SidebarView(selectedItem: $selectedSidebarItem)
-                .frame(minWidth: 180, idealWidth: 220)
+            SidebarView(
+                selectedItem: $selectedSidebarItem,
+                tags: allTags,
+                selectedTag: $selectedTag,
+                selectedDate: $selectedDate,
+                dateFilterMode: $dateFilterMode,
+                tasks: taskItems
+            )
+            .frame(minWidth: 220, idealWidth: 260)
+            .onChange(of: selectedTag) { _, newValue in
+                if newValue != nil {
+                    selectedSidebarItem = nil
+                    selectedDate = nil
+                }
+            }
+            .onChange(of: selectedDate) { _, newValue in
+                dateFilterMode = .all
+                if newValue != nil {
+                    selectedSidebarItem = nil
+                    selectedTag = nil
+                }
+            }
+            .onChange(of: selectedSidebarItem) { _, newValue in
+                if newValue != nil {
+                    selectedTag = nil
+                    selectedDate = nil
+                }
+            }
         } detail: {
             DetailPanelView(
                 selectedSidebarItem: selectedSidebarItem,
@@ -100,6 +128,9 @@ struct ContentView: View {
                 tasks: taskItems,
                 searchText: $searchText,
                 showNewTaskSheet: $showNewTaskSheet,
+                selectedTag: selectedTag,
+                selectedDate: selectedDate,
+                dateFilterMode: dateFilterMode,
                 onToggleComplete: { taskItem in
                     toggleComplete(taskItem: taskItem)
                 },
@@ -149,10 +180,17 @@ struct ContentView: View {
         .onAppear {
             WindowManager.shared.openWindowAction = openWindow
         }
+        .onReceive(NotificationCenter.default.publisher(for: .showNewTaskSheet)) { _ in
+            showNewTaskSheet = true
+        }
     }
     
     private var taskItems: [TaskItem] {
         taskModels.map { $0.toTaskItem() }
+    }
+    
+    private var allTags: [String] {
+        Array(Set(taskModels.flatMap { $0.tags })).sorted()
     }
     
     private func createTask(
@@ -235,11 +273,13 @@ struct ContentView: View {
         
         if urls.isEmpty {
             PhotoStorageService.shared.pickPhotos { pickedURLs in
-                guard !pickedURLs.isEmpty else { return }
-                let storedPaths = PhotoStorageService.shared.storePhotos(pickedURLs)
-                task.photos.append(contentsOf: storedPaths)
-                task.touch()
-                try? self.modelContext.save()
+                Task { @MainActor in
+                    guard !pickedURLs.isEmpty else { return }
+                    let storedPaths = PhotoStorageService.shared.storePhotos(pickedURLs)
+                    task.photos.append(contentsOf: storedPaths)
+                    task.touch()
+                    try? self.modelContext.save()
+                }
             }
         } else {
             let storedPaths = PhotoStorageService.shared.storePhotos(urls)

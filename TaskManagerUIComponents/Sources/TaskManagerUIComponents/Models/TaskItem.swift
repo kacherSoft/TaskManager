@@ -12,6 +12,7 @@ public struct TaskItem: Identifiable, Sendable {
     public let dueDate: Date?
     public let tags: [String]
     public let photos: [URL]
+    public let createdAt: Date?
     
     public enum Status: String, CaseIterable, Sendable {
         case todo = "Todo"
@@ -36,7 +37,8 @@ public struct TaskItem: Identifiable, Sendable {
         hasReminder: Bool,
         dueDate: Date?,
         tags: [String],
-        photos: [URL] = []
+        photos: [URL] = [],
+        createdAt: Date? = nil
     ) {
         self.id = id
         self.title = title
@@ -48,6 +50,7 @@ public struct TaskItem: Identifiable, Sendable {
         self.dueDate = dueDate
         self.tags = tags
         self.photos = photos
+        self.createdAt = createdAt
     }
     
     // Legacy initializer for compatibility
@@ -61,7 +64,8 @@ public struct TaskItem: Identifiable, Sendable {
         hasReminder: Bool,
         dueDate: Date?,
         tags: [String],
-        photos: [URL] = []
+        photos: [URL] = [],
+        createdAt: Date? = nil
     ) {
         self.id = id
         self.title = title
@@ -73,6 +77,7 @@ public struct TaskItem: Identifiable, Sendable {
         self.dueDate = dueDate
         self.tags = tags
         self.photos = photos
+        self.createdAt = createdAt
     }
 
     public nonisolated(unsafe) static let sampleTasks = [

@@ -12,10 +12,19 @@ public struct TaskListView: View {
     let onAddPhotos: ((TaskItem, [URL]) -> Void)?
     let onPickPhotos: ((@escaping ([URL]) -> Void) -> Void)?
     let onDeletePhoto: ((URL) -> Void)?
+    let calendarFilterDate: Date?
+    let calendarFilterMode: CalendarFilterMode
 
-    public init(tasks: [TaskItem], selectedTask: Binding<TaskItem?>) {
+    public init(
+        tasks: [TaskItem],
+        selectedTask: Binding<TaskItem?>,
+        calendarFilterDate: Date? = nil,
+        calendarFilterMode: CalendarFilterMode = .all
+    ) {
         self.tasks = tasks
         self._selectedTask = selectedTask
+        self.calendarFilterDate = calendarFilterDate
+        self.calendarFilterMode = calendarFilterMode
         self.onToggleComplete = nil
         self.onEdit = nil
         self.onDelete = nil
@@ -28,6 +37,8 @@ public struct TaskListView: View {
     public init(
         tasks: [TaskItem],
         selectedTask: Binding<TaskItem?>,
+        calendarFilterDate: Date? = nil,
+        calendarFilterMode: CalendarFilterMode = .all,
         onToggleComplete: @escaping (TaskItem) -> Void,
         onEdit: @escaping (TaskItem, String, String, Date?, Bool, TaskItem.Priority, [String], [URL]) -> Void,
         onDelete: @escaping (TaskItem) -> Void,
@@ -38,6 +49,8 @@ public struct TaskListView: View {
     ) {
         self.tasks = tasks
         self._selectedTask = selectedTask
+        self.calendarFilterDate = calendarFilterDate
+        self.calendarFilterMode = calendarFilterMode
         self.onToggleComplete = onToggleComplete
         self.onEdit = onEdit
         self.onDelete = onDelete
@@ -55,6 +68,8 @@ public struct TaskListView: View {
                         TaskRow(
                             task: task,
                             isSelected: selectedTask?.id == task.id,
+                            calendarFilterDate: calendarFilterDate,
+                            calendarFilterMode: calendarFilterMode,
                             onStatusChange: { _ in onToggleComplete(task) },
                             onEdit: { title, notes, dueDate, hasReminder, priority, tags, photos in
                                 onEdit(task, title, notes, dueDate, hasReminder, priority, tags, photos)
@@ -67,7 +82,7 @@ public struct TaskListView: View {
                         )
                         .onTapGesture { selectedTask = task }
                     } else {
-                        TaskRow(task: task, isSelected: selectedTask?.id == task.id)
+                        TaskRow(task: task, isSelected: selectedTask?.id == task.id, calendarFilterDate: calendarFilterDate, calendarFilterMode: calendarFilterMode)
                             .onTapGesture { selectedTask = task }
                     }
                 }

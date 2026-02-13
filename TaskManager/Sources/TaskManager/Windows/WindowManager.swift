@@ -27,6 +27,23 @@ final class WindowManager: ObservableObject {
         hideEnhanceMe()
     }
     
+    /// Dismisses any visible floating window. Returns true if something was dismissed.
+    func dismissVisibleFloatingWindow() -> Bool {
+        if let panel = quickEntryPanel, panel.isVisible {
+            hideQuickEntry()
+            return true
+        }
+        if let window = settingsWindow, window.isVisible {
+            hideSettings()
+            return true
+        }
+        if let panel = enhanceMePanel, panel.isVisible {
+            hideEnhanceMe()
+            return true
+        }
+        return false
+    }
+    
     // MARK: - Quick Entry
     
     func showQuickEntry() {
@@ -81,10 +98,19 @@ final class WindowManager: ObservableObject {
     // MARK: - Main Window
     
     func showMainWindow() {
-        NSApp.activate(ignoringOtherApps: true)
         if let window = getMainWindow() {
-            window.makeKeyAndOrderFront(nil)
+            // Ensure the window moves to the current space/desktop
+            window.collectionBehavior.insert(.moveToActiveSpace)
+            // Order out and back to force space move
+            if !window.isVisible || !window.isOnActiveSpace {
+                window.orderOut(nil)
+                window.makeKeyAndOrderFront(nil)
+            } else {
+                window.makeKeyAndOrderFront(nil)
+            }
+            NSApp.activate(ignoringOtherApps: true)
         } else {
+            NSApp.activate(ignoringOtherApps: true)
             openWindowAction?(id: "main-window")
         }
     }

@@ -13,7 +13,8 @@ extension TaskModel {
             hasReminder: hasReminder,
             dueDate: dueDate,
             tags: tags,
-            photos: photos.map { URL(fileURLWithPath: $0) }
+            photos: photos.map { URL(fileURLWithPath: $0) },
+            createdAt: createdAt
         )
     }
 }

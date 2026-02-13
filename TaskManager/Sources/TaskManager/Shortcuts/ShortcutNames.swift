@@ -8,4 +8,5 @@ extension KeyboardShortcuts.Name {
     
     // Local shortcuts (work only when app is focused)
     static let settings = Self("settings")
+    static let newTask = Self("newTask")
 }

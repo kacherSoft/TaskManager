@@ -12,6 +12,8 @@ public struct TaskRow: View {
     let onAddPhotos: (([URL]) -> Void)?
     let onPickPhotos: ((@escaping ([URL]) -> Void) -> Void)?
     let onDeletePhoto: ((URL) -> Void)?
+    let calendarFilterDate: Date?
+    let calendarFilterMode: CalendarFilterMode
     
     @State private var isExpanded = false
     @State private var showEditSheet = false
@@ -19,9 +21,16 @@ public struct TaskRow: View {
     @State private var currentPriority: TaskItem.Priority
     @State private var currentStatus: TaskItem.Status
 
-    public init(task: TaskItem, isSelected: Bool) {
+    public init(
+        task: TaskItem,
+        isSelected: Bool,
+        calendarFilterDate: Date? = nil,
+        calendarFilterMode: CalendarFilterMode = .all
+    ) {
         self.task = task
         self.isSelected = isSelected
+        self.calendarFilterDate = calendarFilterDate
+        self.calendarFilterMode = calendarFilterMode
         self._currentPriority = State(initialValue: task.priority)
         self._currentStatus = State(initialValue: task.status)
         self.onToggleComplete = nil
@@ -37,6 +46,8 @@ public struct TaskRow: View {
     public init(
         task: TaskItem,
         isSelected: Bool,
+        calendarFilterDate: Date? = nil,
+        calendarFilterMode: CalendarFilterMode = .all,
         onToggleComplete: @escaping () -> Void,
         onEdit: @escaping (String, String, Date?, Bool, TaskItem.Priority, [String], [URL]) -> Void,
         onDelete: @escaping () -> Void,
@@ -44,6 +55,8 @@ public struct TaskRow: View {
     ) {
         self.task = task
         self.isSelected = isSelected
+        self.calendarFilterDate = calendarFilterDate
+        self.calendarFilterMode = calendarFilterMode
         self._currentPriority = State(initialValue: task.priority)
         self._currentStatus = State(initialValue: task.status)
         self.onToggleComplete = onToggleComplete
@@ -59,6 +72,8 @@ public struct TaskRow: View {
     public init(
         task: TaskItem,
         isSelected: Bool,
+        calendarFilterDate: Date? = nil,
+        calendarFilterMode: CalendarFilterMode = .all,
         onStatusChange: @escaping (TaskItem.Status) -> Void,
         onEdit: @escaping (String, String, Date?, Bool, TaskItem.Priority, [String], [URL]) -> Void,
         onDelete: @escaping () -> Void,
@@ -69,6 +84,8 @@ public struct TaskRow: View {
     ) {
         self.task = task
         self.isSelected = isSelected
+        self.calendarFilterDate = calendarFilterDate
+        self.calendarFilterMode = calendarFilterMode
         self._currentPriority = State(initialValue: task.priority)
         self._currentStatus = State(initialValue: task.status)
         self.onToggleComplete = nil
@@ -133,10 +150,35 @@ public struct TaskRow: View {
                 // Task Info (title, notes, photos)
                 VStack(alignment: .leading, spacing: 8) {
                     // Title
-                    Text(task.title)
-                        .font(.system(size: 13))
-                        .foregroundStyle(task.isCompleted ? .secondary : .primary)
-                        .strikethrough(task.isCompleted)
+                    HStack(spacing: 6) {
+                        Text(task.title)
+                            .font(.system(size: 13))
+                            .foregroundStyle(task.isCompleted ? .secondary : .primary)
+                            .strikethrough(task.isCompleted)
+                        
+                        if let filterDate = calendarFilterDate {
+                            let calendar = Calendar.current
+                            let isCreated = task.createdAt.map { calendar.isDate($0, inSameDayAs: filterDate) } ?? false
+                            let isDeadline = task.dueDate.map { calendar.isDate($0, inSameDayAs: filterDate) } ?? false
+                            
+                            if isDeadline && (calendarFilterMode == .all || calendarFilterMode == .deadline) {
+                                Text("Deadline")
+                                    .font(.system(size: 9, weight: .medium))
+                                    .foregroundStyle(.white)
+                                    .padding(.horizontal, 5)
+                                    .padding(.vertical, 2)
+                                    .background(.red.opacity(0.7), in: RoundedRectangle(cornerRadius: 3))
+                            }
+                            if isCreated && (calendarFilterMode == .all || calendarFilterMode == .created) {
+                                Text("Created")
+                                    .font(.system(size: 9, weight: .medium))
+                                    .foregroundStyle(.white)
+                                    .padding(.horizontal, 5)
+                                    .padding(.vertical, 2)
+                                    .background(.green.opacity(0.7), in: RoundedRectangle(cornerRadius: 3))
+                            }
+                        }
+                    }
 
                     // Notes (expandable)
                     if !task.notes.isEmpty {
