@@ -2,7 +2,7 @@ import Foundation
 import TaskManagerUIComponents
 
 extension TaskModel {
-    func toTaskItem() -> TaskItem {
+    func toTaskItem(customFieldEntries: [TaskManagerUIComponents.CustomFieldEntry] = []) -> TaskItem {
         TaskItem(
             id: id,
             title: title,
@@ -20,10 +20,57 @@ extension TaskModel {
             isRecurring: isRecurring,
             recurrenceRule: recurrenceRule.flatMap { TaskManagerUIComponents.RecurrenceRule(rawValue: $0.rawValue) },
             recurrenceInterval: recurrenceInterval,
-            budget: budget,
-            client: client,
-            effort: effort
+            customFieldEntries: customFieldEntries
         )
+    }
+}
+
+extension CustomFieldDefinitionModel {
+    func toDefinition() -> TaskManagerUIComponents.CustomFieldDefinition {
+        TaskManagerUIComponents.CustomFieldDefinition(
+            id: id,
+            name: name,
+            valueType: valueType.toUIComponentValueType(),
+            isActive: isActive,
+            sortOrder: sortOrder
+        )
+    }
+}
+
+extension CustomFieldValueModel {
+    func toEntry(definition: CustomFieldDefinitionModel) -> TaskManagerUIComponents.CustomFieldEntry {
+        TaskManagerUIComponents.CustomFieldEntry(
+            definitionId: definitionId,
+            name: definition.name,
+            valueType: definition.valueType.toUIComponentValueType(),
+            stringValue: stringValue,
+            numberValue: numberValue,
+            decimalValue: decimalValue,
+            dateValue: dateValue,
+            boolValue: boolValue
+        )
+    }
+}
+
+extension CustomFieldValueType {
+    func toUIComponentValueType() -> TaskManagerUIComponents.CustomFieldValueType {
+        switch self {
+        case .text: return .text
+        case .number: return .number
+        case .currency: return .currency
+        case .date: return .date
+        case .toggle: return .toggle
+        }
+    }
+    
+    static func from(_ type: TaskManagerUIComponents.CustomFieldValueType) -> CustomFieldValueType {
+        switch type {
+        case .text: return .text
+        case .number: return .number
+        case .currency: return .currency
+        case .date: return .date
+        case .toggle: return .toggle
+        }
     }
 }
 

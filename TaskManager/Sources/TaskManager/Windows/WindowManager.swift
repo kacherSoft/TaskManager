@@ -26,6 +26,28 @@ final class WindowManager: ObservableObject {
         hideSettings()
         hideEnhanceMe()
     }
+
+    private func allTags(in context: ModelContext) -> [String] {
+        do {
+            let models = try context.fetch(FetchDescriptor<TaskModel>())
+            return Array(Set(models.flatMap { $0.tags })).sorted()
+        } catch {
+            return []
+        }
+    }
+
+    private func activeCustomFieldDefinitions(in context: ModelContext) -> [TaskManagerUIComponents.CustomFieldDefinition] {
+        do {
+            var descriptor = FetchDescriptor<CustomFieldDefinitionModel>(
+                sortBy: [SortDescriptor(\.sortOrder)]
+            )
+            descriptor.predicate = #Predicate { $0.isActive }
+            let models = try context.fetch(descriptor)
+            return models.map { $0.toDefinition() }
+        } catch {
+            return []
+        }
+    }
     
     /// Dismisses any visible floating window. Returns true if something was dismissed.
     func dismissVisibleFloatingWindow() -> Bool {
@@ -57,7 +79,7 @@ final class WindowManager: ObservableObject {
         
         let view = QuickEntryWrapper(
             onDismiss: { [weak self] in self?.hideQuickEntry() },
-            onCreate: { [weak self] title, notes, dueDate, hasReminder, duration, priority, tags, photos, isRecurring, recurrenceRule, recurrenceInterval, budget, client, effort in
+            onCreate: { [weak self] title, notes, dueDate, hasReminder, duration, priority, tags, photos, isRecurring, recurrenceRule, recurrenceInterval, customFieldValues in
                 self?.createTask(
                     title: title,
                     notes: notes,
@@ -70,12 +92,12 @@ final class WindowManager: ObservableObject {
                     isRecurring: isRecurring,
                     recurrenceRule: recurrenceRule,
                     recurrenceInterval: recurrenceInterval,
-                    budget: budget,
-                    client: client,
-                    effort: effort
+                    customFieldValues: customFieldValues
                 )
                 self?.hideQuickEntry()
             },
+            activeCustomFieldDefinitions: self.activeCustomFieldDefinitions(in: container.mainContext),
+            availableTags: self.allTags(in: container.mainContext),
             onPickPhotos: { completion in
                 PhotoStorageService.shared.pickPhotos(completion: completion)
             }
@@ -104,9 +126,7 @@ final class WindowManager: ObservableObject {
         isRecurring: Bool = false,
         recurrenceRule: TaskManagerUIComponents.RecurrenceRule = .weekly,
         recurrenceInterval: Int = 1,
-        budget: Decimal? = nil,
-        client: String? = nil,
-        effort: Double? = nil
+        customFieldValues: [UUID: TaskManagerUIComponents.CustomFieldEditValue] = [:]
     ) {
         guard let container = modelContainer else { return }
         let context = container.mainContext
@@ -135,12 +155,49 @@ final class WindowManager: ObservableObject {
             photos: storedPaths,
             isRecurring: isRecurring,
             recurrenceRule: isRecurring ? RecurrenceRule(rawValue: recurrenceRule.rawValue) : nil,
-            recurrenceInterval: recurrenceInterval,
-            budget: budget,
-            client: client,
-            effort: effort
+            recurrenceInterval: recurrenceInterval
         )
+
+        if hasReminder {
+            let soundId: String = {
+                do {
+                    if let settings = try context.fetch(FetchDescriptor<SettingsModel>()).first {
+                        return settings.reminderSoundId
+                    }
+                } catch {
+                    return "default"
+                }
+                return "default"
+            }()
+            task.reminderFireDate = Date().addingTimeInterval(reminderDuration)
+            NotificationService.shared.scheduleTimerReminder(
+                for: task.id,
+                title: title,
+                duration: reminderDuration,
+                soundId: soundId
+            )
+        }
+
         context.insert(task)
+
+        // Save custom field values
+        for (definitionId, editValue) in customFieldValues {
+            let model = CustomFieldValueModel(definitionId: definitionId, taskId: task.id)
+            switch editValue {
+            case .text(let text):
+                model.stringValue = text.isEmpty ? nil : text
+            case .number(let number):
+                model.numberValue = number
+            case .currency(let decimal):
+                model.decimalValue = decimal
+            case .date(let date):
+                model.dateValue = date
+            case .toggle(let bool):
+                model.boolValue = bool
+            }
+            context.insert(model)
+        }
+
         do {
             try context.save()
         } catch {

@@ -181,6 +181,8 @@ struct GeneralSettingsView: View {
                             set: { _ in subscriptionService.toggleVIPAdminGrant() }
                         ))
                         .toggleStyle(.switch)
+                        .controlSize(.small)
+                        .accessibilityLabel("VIP Admin Grant")
                     }
                     #endif
                 }
@@ -299,6 +301,8 @@ struct SettingsToggleRow: View {
             
             Toggle("", isOn: $isOn)
                 .toggleStyle(.switch)
+                .controlSize(.small)
+                .accessibilityLabel(title)
         }
     }
 }

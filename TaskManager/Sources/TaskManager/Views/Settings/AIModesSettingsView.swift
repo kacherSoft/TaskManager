@@ -250,6 +250,7 @@ private struct ModeEditorSheet: View {
                 if subscriptionService.hasFullAccess {
                     Section("Input") {
                         Toggle("Allow Attachments (Images & PDF)", isOn: $supportsAttachments)
+                            .controlSize(.small)
                             .disabled(!selectedProvider.supportsAnyAttachments)
                         if !selectedProvider.supportsAnyAttachments {
                             Label("Attachments are currently not supported for this provider.", systemImage: "info.circle")

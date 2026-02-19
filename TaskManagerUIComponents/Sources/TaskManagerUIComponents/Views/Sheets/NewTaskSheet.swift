@@ -15,15 +15,14 @@ public struct NewTaskSheet: View {
     @State private var isRecurring = false
     @State private var recurrenceRule: RecurrenceRule = .weekly
     @State private var recurrenceInterval = 1
-    @State private var budget: Decimal?
-    @State private var client = ""
-    @State private var effortHours: Double?
+    @State private var customFieldValues: [UUID: CustomFieldEditValue] = [:]
     @State private var showValidationError = false
     @State private var showCreateConfirmation = false
     
-    private let onCreate: ((String, String, Date?, Bool, TimeInterval, TaskItem.Priority, [String], [URL], Bool, RecurrenceRule, Int, Decimal?, String?, Double?) -> Void)?
+    private let onCreate: ((String, String, Date?, Bool, TimeInterval, TaskItem.Priority, [String], [URL], Bool, RecurrenceRule, Int, [UUID: CustomFieldEditValue]) -> Void)?
     let recurringFeatureEnabled: Bool
-    let customFieldsFeatureEnabled: Bool
+    let activeCustomFieldDefinitions: [CustomFieldDefinition]
+    let availableTags: [String]
     let onPickPhotos: ((@escaping ([URL]) -> Void) -> Void)?
     let onDeletePhoto: ((URL) -> Void)?
 
@@ -31,7 +30,8 @@ public struct NewTaskSheet: View {
         self._isPresented = isPresented
         self.onCreate = nil
         self.recurringFeatureEnabled = false
-        self.customFieldsFeatureEnabled = false
+        self.activeCustomFieldDefinitions = []
+        self.availableTags = []
         self.onPickPhotos = nil
         self.onDeletePhoto = nil
     }
@@ -39,14 +39,16 @@ public struct NewTaskSheet: View {
     public init(
         isPresented: Binding<Bool>,
         recurringFeatureEnabled: Bool = false,
-        customFieldsFeatureEnabled: Bool = false,
+        activeCustomFieldDefinitions: [CustomFieldDefinition] = [],
+        availableTags: [String] = [],
         onPickPhotos: ((@escaping ([URL]) -> Void) -> Void)? = nil,
         onDeletePhoto: ((URL) -> Void)? = nil,
-        onCreate: @escaping (String, String, Date?, Bool, TimeInterval, TaskItem.Priority, [String], [URL], Bool, RecurrenceRule, Int, Decimal?, String?, Double?) -> Void
+        onCreate: @escaping (String, String, Date?, Bool, TimeInterval, TaskItem.Priority, [String], [URL], Bool, RecurrenceRule, Int, [UUID: CustomFieldEditValue]) -> Void
     ) {
         self._isPresented = isPresented
         self.recurringFeatureEnabled = recurringFeatureEnabled
-        self.customFieldsFeatureEnabled = customFieldsFeatureEnabled
+        self.activeCustomFieldDefinitions = activeCustomFieldDefinitions
+        self.availableTags = availableTags
         self.onPickPhotos = onPickPhotos
         self.onDeletePhoto = onDeletePhoto
         self.onCreate = onCreate
@@ -60,11 +62,6 @@ public struct NewTaskSheet: View {
         showCreateConfirmation = true
     }
     
-    private var normalizedClient: String? {
-        let value = client.trimmingCharacters(in: .whitespacesAndNewlines)
-        return value.isEmpty ? nil : value
-    }
-
     private func performCreate() {
         let effectiveRecurring = recurringFeatureEnabled ? isRecurring : false
 
@@ -80,9 +77,7 @@ public struct NewTaskSheet: View {
             effectiveRecurring,
             recurrenceRule,
             recurrenceInterval,
-            customFieldsFeatureEnabled ? budget : nil,
-            customFieldsFeatureEnabled ? normalizedClient : nil,
-            customFieldsFeatureEnabled ? effortHours : nil
+            customFieldValues
         )
         isPresented = false
     }
@@ -103,11 +98,10 @@ public struct NewTaskSheet: View {
                 isRecurring: $isRecurring,
                 recurrenceRule: $recurrenceRule,
                 recurrenceInterval: $recurrenceInterval,
-                budget: $budget,
-                client: $client,
-                effortHours: $effortHours,
+                customFieldValues: $customFieldValues,
+                activeCustomFieldDefinitions: activeCustomFieldDefinitions,
                 recurringFeatureEnabled: recurringFeatureEnabled,
-                customFieldsFeatureEnabled: customFieldsFeatureEnabled,
+                availableTags: availableTags,
                 onPickPhotos: onPickPhotos,
                 onDeletePhoto: onDeletePhoto
             )

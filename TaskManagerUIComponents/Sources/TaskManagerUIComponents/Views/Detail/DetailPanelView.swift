@@ -13,7 +13,7 @@ public struct DetailPanelView: View {
     let selectedPriority: TaskItem.Priority?
     
     let onToggleComplete: ((TaskItem) -> Void)?
-    let onEdit: ((TaskItem, String, String, Date?, Bool, TimeInterval, TaskItem.Priority, [String], [URL], Bool, RecurrenceRule, Int, Decimal?, String?, Double?) -> Void)?
+    let onEdit: ((TaskItem, String, String, Date?, Bool, TimeInterval, TaskItem.Priority, [String], [URL], Bool, RecurrenceRule, Int, [UUID: CustomFieldEditValue]) -> Void)?
     let onDelete: ((TaskItem) -> Void)?
     let onPriorityChange: ((TaskItem, TaskItem.Priority) -> Void)?
     let onAddPhotos: ((TaskItem, [URL]) -> Void)?
@@ -24,7 +24,7 @@ public struct DetailPanelView: View {
     let onRemoveReminder: ((TaskItem) -> Void)?
     let onStopAlarm: ((TaskItem) -> Void)?
     let recurringFeatureEnabled: Bool
-    let customFieldsFeatureEnabled: Bool
+    let activeCustomFieldDefinitions: [CustomFieldDefinition]
 
     public init(
         selectedSidebarItem: SidebarItem?,
@@ -37,7 +37,7 @@ public struct DetailPanelView: View {
         dateFilterMode: CalendarFilterMode = .all,
         selectedPriority: TaskItem.Priority? = nil,
         recurringFeatureEnabled: Bool = false,
-        customFieldsFeatureEnabled: Bool = false
+        activeCustomFieldDefinitions: [CustomFieldDefinition] = []
     ) {
         self.selectedSidebarItem = selectedSidebarItem
         self._selectedTask = selectedTask
@@ -60,7 +60,7 @@ public struct DetailPanelView: View {
         self.onRemoveReminder = nil
         self.onStopAlarm = nil
         self.recurringFeatureEnabled = recurringFeatureEnabled
-        self.customFieldsFeatureEnabled = customFieldsFeatureEnabled
+        self.activeCustomFieldDefinitions = activeCustomFieldDefinitions
     }
     
     public init(
@@ -74,9 +74,9 @@ public struct DetailPanelView: View {
         dateFilterMode: CalendarFilterMode = .all,
         selectedPriority: TaskItem.Priority? = nil,
         recurringFeatureEnabled: Bool = false,
-        customFieldsFeatureEnabled: Bool = false,
+        activeCustomFieldDefinitions: [CustomFieldDefinition] = [],
         onToggleComplete: @escaping (TaskItem) -> Void,
-        onEdit: @escaping (TaskItem, String, String, Date?, Bool, TimeInterval, TaskItem.Priority, [String], [URL], Bool, RecurrenceRule, Int, Decimal?, String?, Double?) -> Void,
+        onEdit: @escaping (TaskItem, String, String, Date?, Bool, TimeInterval, TaskItem.Priority, [String], [URL], Bool, RecurrenceRule, Int, [UUID: CustomFieldEditValue]) -> Void,
         onDelete: @escaping (TaskItem) -> Void,
         onPriorityChange: @escaping (TaskItem, TaskItem.Priority) -> Void,
         onAddPhotos: @escaping (TaskItem, [URL]) -> Void = { _, _ in },
@@ -108,7 +108,7 @@ public struct DetailPanelView: View {
         self.onRemoveReminder = onRemoveReminder
         self.onStopAlarm = onStopAlarm
         self.recurringFeatureEnabled = recurringFeatureEnabled
-        self.customFieldsFeatureEnabled = customFieldsFeatureEnabled
+        self.activeCustomFieldDefinitions = activeCustomFieldDefinitions
     }
 
     public var body: some View {
@@ -129,7 +129,7 @@ public struct DetailPanelView: View {
                             calendarFilterDate: selectedDate,
                             calendarFilterMode: dateFilterMode,
                             recurringFeatureEnabled: recurringFeatureEnabled,
-                            customFieldsFeatureEnabled: customFieldsFeatureEnabled,
+                            activeCustomFieldDefinitions: activeCustomFieldDefinitions,
                             onToggleComplete: onToggleComplete,
                             onEdit: onEdit,
                             onDelete: onDelete,
@@ -149,7 +149,7 @@ public struct DetailPanelView: View {
                             calendarFilterDate: selectedDate,
                             calendarFilterMode: dateFilterMode,
                             recurringFeatureEnabled: recurringFeatureEnabled,
-                            customFieldsFeatureEnabled: customFieldsFeatureEnabled
+                            activeCustomFieldDefinitions: activeCustomFieldDefinitions
                         )
                     }
 

@@ -19,14 +19,13 @@ public struct EditTaskSheet: View {
     @State private var isRecurring: Bool
     @State private var recurrenceRule: RecurrenceRule
     @State private var recurrenceInterval: Int
-    @State private var budget: Decimal?
-    @State private var client: String
-    @State private var effortHours: Double?
+    @State private var customFieldValues: [UUID: CustomFieldEditValue] = [:]
     
-    private let onSave: ((String, String, Date?, Bool, TimeInterval, TaskItem.Priority, [String], [URL], Bool, RecurrenceRule, Int, Decimal?, String?, Double?) -> Void)?
+    private let onSave: ((String, String, Date?, Bool, TimeInterval, TaskItem.Priority, [String], [URL], Bool, RecurrenceRule, Int, [UUID: CustomFieldEditValue]) -> Void)?
     private let onDelete: (() -> Void)?
     private let recurringFeatureEnabled: Bool
-    private let customFieldsFeatureEnabled: Bool
+    private let activeCustomFieldDefinitions: [CustomFieldDefinition]
+    private let availableTags: [String]
     private let onPickPhotos: ((@escaping ([URL]) -> Void) -> Void)?
     private let onDeletePhoto: ((URL) -> Void)?
 
@@ -45,13 +44,11 @@ public struct EditTaskSheet: View {
         _isRecurring = State(initialValue: task.isRecurring)
         _recurrenceRule = State(initialValue: task.recurrenceRule ?? .weekly)
         _recurrenceInterval = State(initialValue: max(1, task.recurrenceInterval))
-        _budget = State(initialValue: task.budget)
-        _client = State(initialValue: task.client ?? "")
-        _effortHours = State(initialValue: task.effort)
         self.onSave = nil
         self.onDelete = nil
         self.recurringFeatureEnabled = false
-        self.customFieldsFeatureEnabled = false
+        self.activeCustomFieldDefinitions = []
+        self.availableTags = []
         self.onPickPhotos = nil
         self.onDeletePhoto = nil
     }
@@ -60,8 +57,10 @@ public struct EditTaskSheet: View {
         task: TaskItem,
         isPresented: Binding<Bool>,
         recurringFeatureEnabled: Bool = false,
-        customFieldsFeatureEnabled: Bool = false,
-        onSave: @escaping (String, String, Date?, Bool, TimeInterval, TaskItem.Priority, [String], [URL], Bool, RecurrenceRule, Int, Decimal?, String?, Double?) -> Void,
+        activeCustomFieldDefinitions: [CustomFieldDefinition] = [],
+        initialCustomFieldValues: [UUID: CustomFieldEditValue] = [:],
+        availableTags: [String] = [],
+        onSave: @escaping (String, String, Date?, Bool, TimeInterval, TaskItem.Priority, [String], [URL], Bool, RecurrenceRule, Int, [UUID: CustomFieldEditValue]) -> Void,
         onDelete: @escaping () -> Void,
         onPickPhotos: ((@escaping ([URL]) -> Void) -> Void)? = nil,
         onDeletePhoto: ((URL) -> Void)? = nil
@@ -80,13 +79,12 @@ public struct EditTaskSheet: View {
         _isRecurring = State(initialValue: task.isRecurring)
         _recurrenceRule = State(initialValue: task.recurrenceRule ?? .weekly)
         _recurrenceInterval = State(initialValue: max(1, task.recurrenceInterval))
-        _budget = State(initialValue: task.budget)
-        _client = State(initialValue: task.client ?? "")
-        _effortHours = State(initialValue: task.effort)
+        _customFieldValues = State(initialValue: initialCustomFieldValues)
         self.onSave = onSave
         self.onDelete = onDelete
         self.recurringFeatureEnabled = recurringFeatureEnabled
-        self.customFieldsFeatureEnabled = customFieldsFeatureEnabled
+        self.activeCustomFieldDefinitions = activeCustomFieldDefinitions
+        self.availableTags = availableTags
         self.onPickPhotos = onPickPhotos
         self.onDeletePhoto = onDeletePhoto
     }
@@ -99,18 +97,10 @@ public struct EditTaskSheet: View {
         showSaveConfirmation = true
     }
     
-    private var normalizedClient: String? {
-        let value = client.trimmingCharacters(in: .whitespacesAndNewlines)
-        return value.isEmpty ? nil : value
-    }
-
     private func performSave() {
         let effectiveRecurring = recurringFeatureEnabled ? isRecurring : task.isRecurring
         let effectiveRule = recurringFeatureEnabled ? recurrenceRule : (task.recurrenceRule ?? .weekly)
         let effectiveInterval = recurringFeatureEnabled ? recurrenceInterval : max(1, task.recurrenceInterval)
-        let effectiveBudget = customFieldsFeatureEnabled ? budget : task.budget
-        let effectiveClient = customFieldsFeatureEnabled ? normalizedClient : task.client
-        let effectiveEffort = customFieldsFeatureEnabled ? effortHours : task.effort
 
         onSave?(
             taskTitle.trimmingCharacters(in: .whitespacesAndNewlines),
@@ -124,9 +114,7 @@ public struct EditTaskSheet: View {
             effectiveRecurring,
             effectiveRule,
             effectiveInterval,
-            effectiveBudget,
-            effectiveClient,
-            effectiveEffort
+            customFieldValues
         )
         isPresented = false
     }
@@ -150,11 +138,10 @@ public struct EditTaskSheet: View {
                 isRecurring: $isRecurring,
                 recurrenceRule: $recurrenceRule,
                 recurrenceInterval: $recurrenceInterval,
-                budget: $budget,
-                client: $client,
-                effortHours: $effortHours,
+                customFieldValues: $customFieldValues,
+                activeCustomFieldDefinitions: activeCustomFieldDefinitions,
                 recurringFeatureEnabled: recurringFeatureEnabled,
-                customFieldsFeatureEnabled: customFieldsFeatureEnabled,
+                availableTags: availableTags,
                 onPickPhotos: onPickPhotos,
                 onDeletePhoto: onDeletePhoto
             )

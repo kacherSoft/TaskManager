@@ -11,25 +11,29 @@ public struct QuickEntryContent: View {
     @State private var selectedPriority: TaskItem.Priority = .none
     @State private var tags: [String] = []
     @State private var photos: [URL] = []
-    @State private var budget: Decimal?
-    @State private var client = ""
-    @State private var effortHours: Double?
+    @State private var customFieldValues: [UUID: CustomFieldEditValue] = [:]
     @State private var showValidationError = false
     @State private var showCreateConfirmation = false
     
     public var onCancel: () -> Void
-    public var onCreate: (String, String, Date?, Bool, TimeInterval, TaskItem.Priority, [String], [URL], Bool, RecurrenceRule, Int, Decimal?, String?, Double?) -> Void
+    public var onCreate: (String, String, Date?, Bool, TimeInterval, TaskItem.Priority, [String], [URL], Bool, RecurrenceRule, Int, [UUID: CustomFieldEditValue]) -> Void
+    public var activeCustomFieldDefinitions: [CustomFieldDefinition]
+    public var availableTags: [String]
     public var onPickPhotos: ((@escaping ([URL]) -> Void) -> Void)?
     public var onDeletePhoto: ((URL) -> Void)?
 
     public init(
         onCancel: @escaping () -> Void,
-        onCreate: @escaping (String, String, Date?, Bool, TimeInterval, TaskItem.Priority, [String], [URL], Bool, RecurrenceRule, Int, Decimal?, String?, Double?) -> Void,
+        onCreate: @escaping (String, String, Date?, Bool, TimeInterval, TaskItem.Priority, [String], [URL], Bool, RecurrenceRule, Int, [UUID: CustomFieldEditValue]) -> Void,
+        activeCustomFieldDefinitions: [CustomFieldDefinition] = [],
+        availableTags: [String] = [],
         onPickPhotos: ((@escaping ([URL]) -> Void) -> Void)? = nil,
         onDeletePhoto: ((URL) -> Void)? = nil
     ) {
         self.onCancel = onCancel
         self.onCreate = onCreate
+        self.activeCustomFieldDefinitions = activeCustomFieldDefinitions
+        self.availableTags = availableTags
         self.onPickPhotos = onPickPhotos
         self.onDeletePhoto = onDeletePhoto
     }
@@ -55,9 +59,7 @@ public struct QuickEntryContent: View {
             false,
             .weekly,
             1,
-            nil,
-            nil,
-            nil
+            customFieldValues
         )
     }
 
@@ -75,9 +77,9 @@ public struct QuickEntryContent: View {
                 tags: $tags,
                 showValidationError: $showValidationError,
                 photos: $photos,
-                budget: $budget,
-                client: $client,
-                effortHours: $effortHours,
+                customFieldValues: $customFieldValues,
+                activeCustomFieldDefinitions: activeCustomFieldDefinitions,
+                availableTags: availableTags,
                 onPickPhotos: onPickPhotos,
                 onDeletePhoto: onDeletePhoto
             )

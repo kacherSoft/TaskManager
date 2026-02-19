@@ -6,7 +6,7 @@ public struct TaskRow: View {
     let isSelected: Bool
     let onToggleComplete: (() -> Void)?
     let onStatusChange: ((TaskItem.Status) -> Void)?
-    let onEdit: ((String, String, Date?, Bool, TimeInterval, TaskItem.Priority, [String], [URL], Bool, RecurrenceRule, Int, Decimal?, String?, Double?) -> Void)?
+    let onEdit: ((String, String, Date?, Bool, TimeInterval, TaskItem.Priority, [String], [URL], Bool, RecurrenceRule, Int, [UUID: CustomFieldEditValue]) -> Void)?
     let onDelete: (() -> Void)?
     let onPriorityChange: ((TaskItem.Priority) -> Void)?
     let onAddPhotos: (([URL]) -> Void)?
@@ -19,7 +19,7 @@ public struct TaskRow: View {
     let calendarFilterDate: Date?
     let calendarFilterMode: CalendarFilterMode
     let recurringFeatureEnabled: Bool
-    let customFieldsFeatureEnabled: Bool
+    let activeCustomFieldDefinitions: [CustomFieldDefinition]
     
     @State private var isExpanded = false
     @State private var showEditSheet = false
@@ -36,14 +36,14 @@ public struct TaskRow: View {
         calendarFilterDate: Date? = nil,
         calendarFilterMode: CalendarFilterMode = .all,
         recurringFeatureEnabled: Bool = false,
-        customFieldsFeatureEnabled: Bool = false
+        activeCustomFieldDefinitions: [CustomFieldDefinition] = []
     ) {
         self.task = task
         self.isSelected = isSelected
         self.calendarFilterDate = calendarFilterDate
         self.calendarFilterMode = calendarFilterMode
         self.recurringFeatureEnabled = recurringFeatureEnabled
-        self.customFieldsFeatureEnabled = customFieldsFeatureEnabled
+        self.activeCustomFieldDefinitions = activeCustomFieldDefinitions
         self._currentPriority = State(initialValue: task.priority)
         self._currentStatus = State(initialValue: task.status)
         self.onToggleComplete = nil
@@ -66,9 +66,9 @@ public struct TaskRow: View {
         calendarFilterDate: Date? = nil,
         calendarFilterMode: CalendarFilterMode = .all,
         recurringFeatureEnabled: Bool = false,
-        customFieldsFeatureEnabled: Bool = false,
+        activeCustomFieldDefinitions: [CustomFieldDefinition] = [],
         onToggleComplete: @escaping () -> Void,
-        onEdit: @escaping (String, String, Date?, Bool, TimeInterval, TaskItem.Priority, [String], [URL], Bool, RecurrenceRule, Int, Decimal?, String?, Double?) -> Void,
+        onEdit: @escaping (String, String, Date?, Bool, TimeInterval, TaskItem.Priority, [String], [URL], Bool, RecurrenceRule, Int, [UUID: CustomFieldEditValue]) -> Void,
         onDelete: @escaping () -> Void,
         onPriorityChange: @escaping (TaskItem.Priority) -> Void
     ) {
@@ -77,7 +77,7 @@ public struct TaskRow: View {
         self.calendarFilterDate = calendarFilterDate
         self.calendarFilterMode = calendarFilterMode
         self.recurringFeatureEnabled = recurringFeatureEnabled
-        self.customFieldsFeatureEnabled = customFieldsFeatureEnabled
+        self.activeCustomFieldDefinitions = activeCustomFieldDefinitions
         self._currentPriority = State(initialValue: task.priority)
         self._currentStatus = State(initialValue: task.status)
         self.onToggleComplete = onToggleComplete
@@ -100,9 +100,9 @@ public struct TaskRow: View {
         calendarFilterDate: Date? = nil,
         calendarFilterMode: CalendarFilterMode = .all,
         recurringFeatureEnabled: Bool = false,
-        customFieldsFeatureEnabled: Bool = false,
+        activeCustomFieldDefinitions: [CustomFieldDefinition] = [],
         onStatusChange: @escaping (TaskItem.Status) -> Void,
-        onEdit: @escaping (String, String, Date?, Bool, TimeInterval, TaskItem.Priority, [String], [URL], Bool, RecurrenceRule, Int, Decimal?, String?, Double?) -> Void,
+        onEdit: @escaping (String, String, Date?, Bool, TimeInterval, TaskItem.Priority, [String], [URL], Bool, RecurrenceRule, Int, [UUID: CustomFieldEditValue]) -> Void,
         onDelete: @escaping () -> Void,
         onPriorityChange: @escaping (TaskItem.Priority) -> Void,
         onAddPhotos: @escaping ([URL]) -> Void,
@@ -118,7 +118,7 @@ public struct TaskRow: View {
         self.calendarFilterDate = calendarFilterDate
         self.calendarFilterMode = calendarFilterMode
         self.recurringFeatureEnabled = recurringFeatureEnabled
-        self.customFieldsFeatureEnabled = customFieldsFeatureEnabled
+        self.activeCustomFieldDefinitions = activeCustomFieldDefinitions
         self._currentPriority = State(initialValue: task.priority)
         self._currentStatus = State(initialValue: task.status)
         self.onToggleComplete = nil
@@ -208,6 +208,32 @@ public struct TaskRow: View {
             return "Reminder active — click to edit or remove"
         } else {
             return "Set reminder"
+        }
+    }
+
+    @ViewBuilder
+    private var reminderPopoverContent: some View {
+        if isReminderActiveNow {
+            ReminderActionPopover(
+                isPresented: $showReminderPopover,
+                currentDuration: task.reminderDuration,
+                mode: .edit,
+                onSetDuration: { duration in
+                    onEditReminder?(duration)
+                },
+                onRemoveReminder: {
+                    onRemoveReminder?()
+                }
+            )
+        } else {
+            ReminderActionPopover(
+                isPresented: $showReminderPopover,
+                currentDuration: task.reminderDuration,
+                mode: .create,
+                onSetDuration: { duration in
+                    onCreateReminder?(duration)
+                }
+            )
         }
     }
 
@@ -310,21 +336,10 @@ public struct TaskRow: View {
                         .foregroundStyle(task.isToday ? .orange : .secondary)
                     }
 
-                    if customFieldsFeatureEnabled {
-                        if let client = task.client {
-                            Text(client)
-                                .font(.system(size: 10))
-                                .foregroundStyle(.secondary)
-                        }
-
-                        if let budget = task.budget {
-                            Text(budget, format: .currency(code: Locale.current.currency?.identifier ?? "USD"))
-                                .font(.system(size: 10))
-                                .foregroundStyle(.secondary)
-                        }
-
-                        if let effort = task.effort {
-                            Text("\(effort, format: .number)h")
+                    ForEach(task.customFieldEntries) { entry in
+                        let value = entry.displayValue
+                        if !value.isEmpty {
+                            Text(value)
                                 .font(.system(size: 10))
                                 .foregroundStyle(.secondary)
                         }
@@ -369,28 +384,7 @@ public struct TaskRow: View {
                     .buttonStyle(.plain)
                     .help(reminderHelpText)
                     .popover(isPresented: $showReminderPopover) {
-                        if isReminderActiveNow {
-                            ReminderActionPopover(
-                                isPresented: $showReminderPopover,
-                                currentDuration: task.reminderDuration,
-                                mode: .edit,
-                                onSetDuration: { duration in
-                                    onEditReminder?(duration)
-                                },
-                                onRemoveReminder: {
-                                    onRemoveReminder?()
-                                }
-                            )
-                        } else {
-                            ReminderActionPopover(
-                                isPresented: $showReminderPopover,
-                                currentDuration: task.reminderDuration,
-                                mode: .create,
-                                onSetDuration: { duration in
-                                    onCreateReminder?(duration)
-                                }
-                            )
-                        }
+                        reminderPopoverContent
                     }
 
                     // Other action buttons only when selected
@@ -433,7 +427,8 @@ public struct TaskRow: View {
                     task: task,
                     isPresented: $showEditSheet,
                     recurringFeatureEnabled: recurringFeatureEnabled,
-                    customFieldsFeatureEnabled: customFieldsFeatureEnabled,
+                    activeCustomFieldDefinitions: activeCustomFieldDefinitions,
+                    initialCustomFieldValues: Dictionary(uniqueKeysWithValues: task.customFieldEntries.map { ($0.id, $0.toEditValue()) }),
                     onSave: onEdit,
                     onDelete: onDelete,
                     onPickPhotos: onPickPhotos,

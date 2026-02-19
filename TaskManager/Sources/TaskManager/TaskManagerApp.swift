@@ -101,6 +101,8 @@ struct ContentView: View {
     @Environment(\.openWindow) private var openWindow
     @EnvironmentObject private var subscriptionService: SubscriptionService
     @Query(sort: \TaskModel.createdAt, order: .reverse) private var taskModels: [TaskModel]
+    @Query(sort: \CustomFieldDefinitionModel.sortOrder) private var customFieldDefinitions: [CustomFieldDefinitionModel]
+    @Query private var customFieldValues: [CustomFieldValueModel]
     @Query private var settings: [SettingsModel]
     
     @State private var selectedSidebarItem: SidebarItem? = .allTasks
@@ -178,11 +180,11 @@ struct ContentView: View {
                     dateFilterMode: dateFilterMode,
                     selectedPriority: selectedPriority,
                     recurringFeatureEnabled: subscriptionService.canUse(.recurringTasks),
-                    customFieldsFeatureEnabled: subscriptionService.canUse(.customFields),
+                    activeCustomFieldDefinitions: activeCustomFieldDefinitions,
                     onToggleComplete: { taskItem in
                         toggleComplete(taskItem: taskItem)
                     },
-                    onEdit: { taskItem, title, notes, dueDate, hasReminder, duration, priority, tags, photos, isRecurring, recurrenceRule, recurrenceInterval, budget, client, effort in
+                    onEdit: { taskItem, title, notes, dueDate, hasReminder, duration, priority, tags, photos, isRecurring, recurrenceRule, recurrenceInterval, customFieldValues in
                         updateTask(
                             taskItem: taskItem,
                             title: title,
@@ -196,9 +198,7 @@ struct ContentView: View {
                             isRecurring: isRecurring,
                             recurrenceRule: recurrenceRule,
                             recurrenceInterval: recurrenceInterval,
-                            budget: budget,
-                            client: client,
-                            effort: effort
+                            customFieldValues: customFieldValues
                         )
                     },
                     onDelete: { taskItem in
@@ -254,11 +254,12 @@ struct ContentView: View {
             NewTaskSheet(
                 isPresented: $showNewTaskSheet,
                 recurringFeatureEnabled: subscriptionService.canUse(.recurringTasks),
-                customFieldsFeatureEnabled: subscriptionService.canUse(.customFields),
+                activeCustomFieldDefinitions: activeCustomFieldDefinitions,
+                availableTags: allTags,
                 onPickPhotos: { completion in
                     PhotoStorageService.shared.pickPhotos(completion: completion)
                 }
-            ) { title, notes, dueDate, hasReminder, duration, priority, tags, photos, isRecurring, recurrenceRule, recurrenceInterval, budget, client, effort in
+            ) { title, notes, dueDate, hasReminder, duration, priority, tags, photos, isRecurring, recurrenceRule, recurrenceInterval, customFieldValues in
                 createTask(
                     title: title,
                     notes: notes,
@@ -271,9 +272,7 @@ struct ContentView: View {
                     isRecurring: isRecurring,
                     recurrenceRule: recurrenceRule,
                     recurrenceInterval: recurrenceInterval,
-                    budget: budget,
-                    client: client,
-                    effort: effort
+                    customFieldValues: customFieldValues
                 )
             }
         }
@@ -316,8 +315,22 @@ struct ContentView: View {
         }
     }
     
+    private var activeCustomFieldDefinitions: [TaskManagerUIComponents.CustomFieldDefinition] {
+        customFieldDefinitions
+            .filter { $0.isActive }
+            .map { $0.toDefinition() }
+    }
+
     private var taskItems: [TaskItem] {
-        let mapped = taskModels.map { $0.toTaskItem() }
+        let mapped = taskModels.map { task in
+            let entries = customFieldValues
+                .filter { $0.taskId == task.id }
+                .compactMap { value -> TaskManagerUIComponents.CustomFieldEntry? in
+                    guard let definition = customFieldDefinitions.first(where: { $0.id == value.definitionId }) else { return nil }
+                    return value.toEntry(definition: definition)
+                }
+            return task.toTaskItem(customFieldEntries: entries)
+        }
         let showCompleted = currentSettings?.showCompletedTasks ?? true
         return showCompleted ? mapped : mapped.filter { !$0.isCompleted }
     }
@@ -402,9 +415,7 @@ struct ContentView: View {
         isRecurring: Bool = false,
         recurrenceRule: TaskManagerUIComponents.RecurrenceRule = .weekly,
         recurrenceInterval: Int = 1,
-        budget: Decimal? = nil,
-        client: String? = nil,
-        effort: Double? = nil
+        customFieldValues: [UUID: TaskManagerUIComponents.CustomFieldEditValue] = [:]
     ) {
         let storedPaths = photos.isEmpty ? [] : PhotoStorageService.shared.storePhotos(photos)
         let task = TaskModel(
@@ -418,10 +429,7 @@ struct ContentView: View {
             photos: storedPaths,
             isRecurring: isRecurring,
             recurrenceRule: isRecurring ? RecurrenceRule(rawValue: recurrenceRule.rawValue) : nil,
-            recurrenceInterval: recurrenceInterval,
-            budget: budget,
-            client: client,
-            effort: effort
+            recurrenceInterval: recurrenceInterval
         )
         
         // Auto-start reminder timer when creating a task with a reminder
@@ -437,7 +445,34 @@ struct ContentView: View {
         }
         
         modelContext.insert(task)
+        saveCustomFieldValues(taskId: task.id, values: customFieldValues)
         saveContext()
+    }
+
+    private func saveCustomFieldValues(taskId: UUID, values: [UUID: TaskManagerUIComponents.CustomFieldEditValue]) {
+        // Delete existing values for this task
+        let existingValues = customFieldValues.filter { $0.taskId == taskId }
+        for existing in existingValues {
+            modelContext.delete(existing)
+        }
+
+        // Insert new values
+        for (definitionId, editValue) in values {
+            let model = CustomFieldValueModel(definitionId: definitionId, taskId: taskId)
+            switch editValue {
+            case .text(let text):
+                model.stringValue = text.isEmpty ? nil : text
+            case .number(let number):
+                model.numberValue = number
+            case .currency(let decimal):
+                model.decimalValue = decimal
+            case .date(let date):
+                model.dateValue = date
+            case .toggle(let bool):
+                model.boolValue = bool
+            }
+            modelContext.insert(model)
+        }
     }
     
     private func findTaskModel(for taskItem: TaskItem) -> TaskModel? {
@@ -511,15 +546,12 @@ struct ContentView: View {
         isRecurring: Bool,
         recurrenceRule: TaskManagerUIComponents.RecurrenceRule,
         recurrenceInterval: Int,
-        budget: Decimal?,
-        client: String?,
-        effort: Double?
+        customFieldValues: [UUID: TaskManagerUIComponents.CustomFieldEditValue] = [:]
     ) {
         guard let task = findTaskModel(for: taskItem) else { return }
         task.title = title
         task.taskDescription = notes
         task.dueDate = dueDate
-        let reminderChanged = task.hasReminder != hasReminder || task.reminderDuration != reminderDuration
         task.hasReminder = hasReminder
         task.reminderDuration = reminderDuration
         task.priority = TaskPriority.from(priority)
@@ -528,12 +560,9 @@ struct ContentView: View {
         task.isRecurring = isRecurring
         task.recurrenceRule = isRecurring ? RecurrenceRule(rawValue: recurrenceRule.rawValue) : nil
         task.recurrenceInterval = max(1, recurrenceInterval)
-        task.budget = budget
-        task.client = client?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == true ? nil : client?.trimmingCharacters(in: .whitespacesAndNewlines)
-        task.effort = effort
         
         // Auto-start/restart reminder when enabled or duration changed via edit
-        if hasReminder && reminderChanged {
+        if hasReminder {
             NotificationService.shared.cancelReminder(for: task.id)
             let soundId = currentSettings?.reminderSoundId ?? "default"
             task.reminderFireDate = Date().addingTimeInterval(reminderDuration)
@@ -549,6 +578,7 @@ struct ContentView: View {
         }
         
         task.touch()
+        saveCustomFieldValues(taskId: task.id, values: customFieldValues)
         saveContext()
     }
     

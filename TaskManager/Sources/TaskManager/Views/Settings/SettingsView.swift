@@ -3,6 +3,7 @@ import KeyboardShortcuts
 
 enum SettingsTab: String, CaseIterable, Identifiable {
     case general = "General"
+    case customFields = "Custom Fields"
     case shortcuts = "Shortcuts"
     case aiConfig = "AI Config"
     case aiModes = "AI Modes"
@@ -12,6 +13,7 @@ enum SettingsTab: String, CaseIterable, Identifiable {
     var icon: String {
         switch self {
         case .general: return "gearshape"
+        case .customFields: return "slider.horizontal.3"
         case .shortcuts: return "keyboard"
         case .aiConfig: return "cpu"
         case .aiModes: return "sparkles"
@@ -37,7 +39,7 @@ struct SettingsView: View {
                 Spacer()
             }
             .padding(12)
-            .frame(width: 180)
+            .frame(width: 200)
             .background(.ultraThinMaterial)
             
             // Content
@@ -45,6 +47,8 @@ struct SettingsView: View {
                 switch selectedTab {
                 case .general:
                     GeneralSettingsView()
+                case .customFields:
+                    CustomFieldsSettingsView()
                 case .shortcuts:
                     ShortcutsSettingsView()
                 case .aiConfig:
@@ -55,7 +59,7 @@ struct SettingsView: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        .frame(width: 650, height: 480)
+        .frame(width: 720, height: 520)
     }
 }
 
@@ -72,6 +76,7 @@ struct SettingsSidebarRow: View {
                     .frame(width: 20)
                 Text(tab.rawValue)
                     .font(.system(size: 13))
+                    .lineLimit(1)
                 Spacer()
             }
             .padding(.horizontal, 12)

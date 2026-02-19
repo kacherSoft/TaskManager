@@ -18,9 +18,7 @@ public struct TaskItem: Identifiable, Sendable {
     public let isRecurring: Bool
     public let recurrenceRule: RecurrenceRule?
     public let recurrenceInterval: Int
-    public let budget: Decimal?
-    public let client: String?
-    public let effort: Double?
+    public let customFieldEntries: [CustomFieldEntry]
     
     public enum Status: String, CaseIterable, Sendable {
         case todo = "Todo"
@@ -62,9 +60,7 @@ public struct TaskItem: Identifiable, Sendable {
         isRecurring: Bool = false,
         recurrenceRule: RecurrenceRule? = nil,
         recurrenceInterval: Int = 1,
-        budget: Decimal? = nil,
-        client: String? = nil,
-        effort: Double? = nil
+        customFieldEntries: [CustomFieldEntry] = []
     ) {
         self.id = id
         self.title = title
@@ -82,9 +78,7 @@ public struct TaskItem: Identifiable, Sendable {
         self.isRecurring = isRecurring
         self.recurrenceRule = recurrenceRule
         self.recurrenceInterval = max(1, recurrenceInterval)
-        self.budget = budget
-        self.client = client
-        self.effort = effort
+        self.customFieldEntries = customFieldEntries
     }
     
     // Legacy initializer for compatibility
@@ -103,9 +97,7 @@ public struct TaskItem: Identifiable, Sendable {
         isRecurring: Bool = false,
         recurrenceRule: RecurrenceRule? = nil,
         recurrenceInterval: Int = 1,
-        budget: Decimal? = nil,
-        client: String? = nil,
-        effort: Double? = nil
+        customFieldEntries: [CustomFieldEntry] = []
     ) {
         self.id = id
         self.title = title
@@ -123,9 +115,7 @@ public struct TaskItem: Identifiable, Sendable {
         self.isRecurring = isRecurring
         self.recurrenceRule = recurrenceRule
         self.recurrenceInterval = max(1, recurrenceInterval)
-        self.budget = budget
-        self.client = client
-        self.effort = effort
+        self.customFieldEntries = customFieldEntries
     }
 
     public static let sampleTasks = [
