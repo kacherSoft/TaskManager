@@ -273,8 +273,16 @@ final class WindowManager: ObservableObject {
         )
         .withAppEnvironment(container: container)
         
+        // Ensure the panel moves to the current space/desktop
+        panel.collectionBehavior.insert(.moveToActiveSpace)
+        
         panel.setContent(view)
         panel.center()
+        
+        // Order out and back to force space move if needed
+        if !panel.isVisible || !panel.isOnActiveSpace {
+            panel.orderOut(nil)
+        }
         panel.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
     }

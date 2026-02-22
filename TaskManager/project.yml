@@ -10,8 +10,9 @@ settings:
     MARKETING_VERSION: 1.0.0
     CURRENT_PROJECT_VERSION: 1
     CODE_SIGN_STYLE: Automatic
+    CODE_SIGN_ENTITLEMENTS: Sources/TaskManager/TaskManager.entitlements
     GENERATE_INFOPLIST_FILE: YES
-    INFOPLIST_KEY_CFBundleDisplayName: TaskManager
+    INFOPLIST_KEY_CFBundleDisplayName: Strata
     INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.productivity
 packages:
   TaskManagerUIComponents:
@@ -40,5 +41,6 @@ schemes:
         TaskManager: all
     run:
       config: Debug
+      storeKitConfiguration: Sources/TaskManager/Configuration.storekit
     archive:
       config: Release

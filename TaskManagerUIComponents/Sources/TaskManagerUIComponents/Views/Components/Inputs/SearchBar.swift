@@ -40,6 +40,11 @@ public struct SearchBar: View {
                     .strokeBorder(Color.blue.opacity(0.5), lineWidth: 1)
             }
         }
-        .onAppear { isFocused = false }
+        .onAppear {
+            // Delay to override macOS auto-focus behavior when window becomes key
+            DispatchQueue.main.async {
+                isFocused = false
+            }
+        }
     }
 }
