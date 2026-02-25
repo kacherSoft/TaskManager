@@ -157,6 +157,8 @@ struct AIConfigSettingsView: View {
                 geminiTestResult = .failure(error.localizedDescription)
             case .zaiAPIKey:
                 zaiTestResult = .failure(error.localizedDescription)
+            default:
+                break
             }
         }
     }
