@@ -206,16 +206,38 @@ final class WindowManager: ObservableObject {
     }
     
     // MARK: - Main Window
+
+    private func isMainWindow(_ window: NSWindow) -> Bool {
+        guard window.canBecomeKey, !(window is NSPanel) else { return false }
+        return window.identifier?.rawValue == "main-window" || window.title == "Task Manager"
+    }
+
+    @discardableResult
+    private func collapseDuplicateMainWindows() -> NSWindow? {
+        let mainWindows = NSApp.windows.filter(isMainWindow)
+        guard mainWindows.count > 1 else { return mainWindows.first }
+
+        let primary =
+            mainWindows.first(where: { $0.isKeyWindow }) ??
+            mainWindows.first(where: { $0.isMainWindow }) ??
+            mainWindows.first
+
+        for window in mainWindows where window !== primary {
+            window.close()
+        }
+
+        return primary
+    }
     
     func focusMainWindowIfPresent() {
-        guard let window = getMainWindow() else { return }
+        guard let window = collapseDuplicateMainWindows() ?? getMainWindow() else { return }
         window.collectionBehavior.insert(.moveToActiveSpace)
         window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
     }
 
     func showMainWindow() {
-        if let window = getMainWindow() {
+        if let window = collapseDuplicateMainWindows() ?? getMainWindow() {
             // Ensure the window moves to the current space/desktop
             window.collectionBehavior.insert(.moveToActiveSpace)
             // Order out and back to force space move
@@ -233,7 +255,7 @@ final class WindowManager: ObservableObject {
     }
     
     func getMainWindow() -> NSWindow? {
-        NSApp.windows.first(where: { ($0.identifier?.rawValue == "main-window" || $0.title == "Task Manager") && $0.canBecomeKey })
+        NSApp.windows.first(where: isMainWindow)
         ?? NSApp.windows.first(where: { $0.canBecomeKey && !($0 is NSPanel) && $0.isVisible })
     }
     

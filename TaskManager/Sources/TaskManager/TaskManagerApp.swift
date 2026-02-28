@@ -32,9 +32,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             for url in urls {
                 await EntitlementService.shared.handleOpenURL(url)
             }
-            // Keep checkout callback on the current window when one already exists.
-            WindowManager.shared.focusMainWindowIfPresent()
+            // Deep-link callbacks should return to the existing main window.
+            WindowManager.shared.showMainWindow()
         }
+    }
+
+    func applicationShouldHandleReopen(
+        _ sender: NSApplication,
+        hasVisibleWindows flag: Bool
+    ) -> Bool {
+        guard !flag else { return true }
+        WindowManager.shared.showMainWindow()
+        return false
     }
     
     @MainActor
@@ -111,7 +120,7 @@ struct TaskManagerApp: App {
     }
 
     var body: some Scene {
-        WindowGroup("Task Manager", id: "main-window") {
+        Window("Task Manager", id: "main-window") {
             if let container {
                 ContentView()
                     .withAppEnvironment(container: container)
