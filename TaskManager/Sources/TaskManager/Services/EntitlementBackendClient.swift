@@ -65,18 +65,20 @@ struct EntitlementBackendClient: Sendable {
     // MARK: - Resolve
 
     func resolve(
-        email: String,
+        email: String?,
         installId: String,
         challengeId: String,
         nonceSignature: String
     ) async throws -> ResolveResponse {
         let body = ResolveRequest(
-            email: email.trimmingCharacters(in: .whitespacesAndNewlines).lowercased(),
+            email: email?
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+                .lowercased(),
             install_id: installId,
             challenge_id: challengeId,
             nonce_signature: nonceSignature
         )
-        return try await post("/v1/entitlements/resolve", body: body)
+        return try await post("/v1/entitlements/resolve", body: body, requiresAuth: true)
     }
 
     // MARK: - Restore
@@ -97,7 +99,7 @@ struct EntitlementBackendClient: Sendable {
             nonce_signature: nonceSignature,
             license_key: licenseKey?.trimmingCharacters(in: .whitespacesAndNewlines)
         )
-        return try await post("/v1/purchases/restore", body: body)
+        return try await post("/v1/purchases/restore", body: body, requiresAuth: true)
     }
 
     // MARK: - Checkout
@@ -114,26 +116,29 @@ struct EntitlementBackendClient: Sendable {
             email: email?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased(),
             return_url: returnURL
         )
-        return try await post("/v1/checkout-sessions", body: body)
+        return try await post("/v1/checkout-sessions", body: body, requiresAuth: true)
     }
 
     // MARK: - Customer Portal
 
     func customerPortalURL(
-        email: String,
+        email: String?,
         installId: String,
         challengeId: String,
         nonceSignature: String
     ) async throws -> URL {
         let body = PortalSessionRequest(
-            email: email.trimmingCharacters(in: .whitespacesAndNewlines).lowercased(),
+            email: email?
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+                .lowercased(),
             install_id: installId,
             challenge_id: challengeId,
             nonce_signature: nonceSignature
         )
         let response: PortalSessionResponse = try await post(
             "/v1/customer-portal/session",
-            body: body
+            body: body,
+            requiresAuth: true
         )
         guard let url = URL(string: response.portal_url),
               url.scheme?.lowercased() == "https" else {
@@ -142,11 +147,56 @@ struct EntitlementBackendClient: Sendable {
         return url
     }
 
+    // MARK: - Account Auth (OTP)
+
+    func startEmailAuth(email: String) async throws -> AuthStartResponse {
+        let body = AuthStartRequest(
+            email: email.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        )
+        return try await post("/v1/auth/email/start", body: body)
+    }
+
+    func verifyEmailAuth(
+        email: String,
+        challengeId: String,
+        code: String
+    ) async throws -> AuthVerifyResponse {
+        let body = AuthVerifyRequest(
+            email: email.trimmingCharacters(in: .whitespacesAndNewlines).lowercased(),
+            challenge_id: challengeId.trimmingCharacters(in: .whitespacesAndNewlines),
+            code: code.trimmingCharacters(in: .whitespacesAndNewlines)
+        )
+        return try await post("/v1/auth/email/verify", body: body)
+    }
+
+    func revokeAccountSession() async throws {
+        let _: SessionRevokeResponse = try await post(
+            "/v1/auth/session/revoke",
+            body: EmptyRequest(),
+            requiresAuth: true
+        )
+    }
+
+    // MARK: - Devices
+
+    func listDevices() async throws -> DevicesListResponse {
+        return try await get("/v1/devices", requiresAuth: true)
+    }
+
+    func revokeDevice(installId: String) async throws {
+        let _: DeviceRevokeResponse = try await post(
+            "/v1/devices/revoke",
+            body: RevokeDeviceRequest(install_id: installId),
+            requiresAuth: true
+        )
+    }
+
     // MARK: - Private
 
     private let timeout: TimeInterval = 15
     private let maxRetries = 2
     private let retryDelay: TimeInterval = 1.0
+    private let keychain = KeychainService.shared
 
     private static func resolveBaseURL(for environment: Environment) -> URL {
         let processEnv = ProcessInfo.processInfo.environment
@@ -169,15 +219,42 @@ struct EntitlementBackendClient: Sendable {
         return fallback
     }
 
+    private func authorizationHeaderValue() -> String? {
+        guard let token = keychain.get(.accountSessionToken)?
+            .trimmingCharacters(in: .whitespacesAndNewlines),
+              !token.isEmpty else {
+            return nil
+        }
+        return "Bearer \(token)"
+    }
+
+    private func decodeErrorCode(from body: String) -> String? {
+        guard let data = body.data(using: .utf8),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let code = json["error_code"] as? String else {
+            return nil
+        }
+        return code
+    }
+
     private func post<T: Encodable, R: Decodable>(
         _ path: String,
-        body: T
+        body: T,
+        requiresAuth: Bool = false
     ) async throws -> R {
         let url = baseURL.appendingPathComponent(path)
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.timeoutInterval = timeout
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        if requiresAuth {
+            guard let authValue = authorizationHeaderValue() else {
+                throw BackendError.authRequired
+            }
+            request.setValue(authValue, forHTTPHeaderField: "Authorization")
+        } else if let authValue = authorizationHeaderValue() {
+            request.setValue(authValue, forHTTPHeaderField: "Authorization")
+        }
         request.httpBody = try JSONEncoder().encode(body)
 
         var lastError: Error?
@@ -204,6 +281,85 @@ struct EntitlementBackendClient: Sendable {
 
                 guard (200...299).contains(httpResponse.statusCode) else {
                     let errorBody = String(data: data, encoding: .utf8) ?? ""
+                    if httpResponse.statusCode == 401 {
+                        let errorCode = decodeErrorCode(from: errorBody)
+                        if errorCode == "AUTH_REQUIRED" || errorCode == "INVALID_SESSION" {
+                            throw BackendError.authRequired
+                        }
+                    }
+                    throw BackendError.httpError(
+                        statusCode: httpResponse.statusCode,
+                        body: errorBody
+                    )
+                }
+
+                return try JSONDecoder().decode(R.self, from: data)
+            } catch let error as BackendError {
+                lastError = error
+                switch error {
+                case .networkError:
+                    if attempt < maxRetries { continue }
+                case .httpError(let code, _) where code >= 500 || code == 429:
+                    if attempt < maxRetries { continue }
+                default:
+                    throw error
+                }
+            } catch {
+                lastError = BackendError.networkError(error)
+                if attempt < maxRetries { continue }
+            }
+        }
+
+        throw lastError ?? BackendError.networkError(URLError(.unknown))
+    }
+
+    private func get<R: Decodable>(
+        _ path: String,
+        requiresAuth: Bool = false
+    ) async throws -> R {
+        let url = baseURL.appendingPathComponent(path)
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        request.timeoutInterval = timeout
+        if requiresAuth {
+            guard let authValue = authorizationHeaderValue() else {
+                throw BackendError.authRequired
+            }
+            request.setValue(authValue, forHTTPHeaderField: "Authorization")
+        } else if let authValue = authorizationHeaderValue() {
+            request.setValue(authValue, forHTTPHeaderField: "Authorization")
+        }
+
+        var lastError: Error?
+
+        for attempt in 0...maxRetries {
+            if attempt > 0 {
+                try await Task.sleep(nanoseconds: UInt64(retryDelay * 1_000_000_000))
+            }
+
+            do {
+                let (data, response) = try await URLSession.shared.data(for: request)
+                guard let httpResponse = response as? HTTPURLResponse else {
+                    throw BackendError.networkError(URLError(.badServerResponse))
+                }
+
+                if httpResponse.statusCode >= 500 || httpResponse.statusCode == 429 {
+                    lastError = BackendError.httpError(
+                        statusCode: httpResponse.statusCode,
+                        body: String(data: data, encoding: .utf8) ?? ""
+                    )
+                    if attempt < maxRetries { continue }
+                    throw lastError!
+                }
+
+                guard (200...299).contains(httpResponse.statusCode) else {
+                    let errorBody = String(data: data, encoding: .utf8) ?? ""
+                    if httpResponse.statusCode == 401 {
+                        let errorCode = decodeErrorCode(from: errorBody)
+                        if errorCode == "AUTH_REQUIRED" || errorCode == "INVALID_SESSION" {
+                            throw BackendError.authRequired
+                        }
+                    }
                     throw BackendError.httpError(
                         statusCode: httpResponse.statusCode,
                         body: errorBody
@@ -234,7 +390,7 @@ struct EntitlementBackendClient: Sendable {
 // MARK: - Request / Response Types
 
 struct ResolveRequest: Encodable {
-    let email: String
+    let email: String?
     let install_id: String
     let challenge_id: String
     let nonce_signature: String
@@ -245,7 +401,7 @@ struct ResolveResponse: Decodable {
 }
 
 struct PortalSessionRequest: Encodable {
-    let email: String
+    let email: String?
     let install_id: String
     let challenge_id: String
     let nonce_signature: String
@@ -300,6 +456,57 @@ struct RestoreResponse: Decodable {
     let resolved_email: String?
 }
 
+struct AuthStartRequest: Encodable {
+    let email: String
+}
+
+struct AuthStartResponse: Decodable {
+    let challenge_id: String
+    let expires_at: Int
+    let delivery: String
+    let debug_code: String?
+}
+
+struct AuthVerifyRequest: Encodable {
+    let email: String
+    let challenge_id: String
+    let code: String
+}
+
+struct AuthVerifyResponse: Decodable {
+    let session_token: String
+    let session_expires_at: Int
+    let user_id: String
+    let email: String
+}
+
+struct EmptyRequest: Encodable {}
+
+struct SessionRevokeResponse: Decodable {
+    let revoked: Bool
+}
+
+struct DeviceInfo: Decodable {
+    let install_id: String
+    let nickname: String?
+    let first_seen_at: Int
+    let last_seen_at: Int
+    let revoked_at: Int?
+    let active: Bool
+}
+
+struct DevicesListResponse: Decodable {
+    let devices: [DeviceInfo]
+}
+
+struct RevokeDeviceRequest: Encodable {
+    let install_id: String
+}
+
+struct DeviceRevokeResponse: Decodable {
+    let revoked: Bool
+}
+
 // MARK: - Errors
 
 enum BackendError: LocalizedError {
@@ -307,6 +514,7 @@ enum BackendError: LocalizedError {
     case networkError(Error)
     case invalidPortalURL
     case invalidToken(String)
+    case authRequired
 
     var errorDescription: String? {
         switch self {
@@ -318,6 +526,8 @@ enum BackendError: LocalizedError {
             return "Invalid portal URL received from backend"
         case .invalidToken(let reason):
             return "Invalid entitlement token: \(reason)"
+        case .authRequired:
+            return "Sign in is required"
         }
     }
 
@@ -328,6 +538,8 @@ enum BackendError: LocalizedError {
             return true
         case .httpError(let code, _):
             return code == 429 || code >= 500
+        case .authRequired:
+            return false
         default:
             return false
         }

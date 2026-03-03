@@ -221,6 +221,39 @@ struct GeneralSettingsView: View {
                         }
                     }
 
+                    HStack {
+                        Image(systemName: "person.crop.circle")
+                            .foregroundStyle(.secondary)
+                            .frame(width: 24)
+
+                        Text("Account")
+                            .font(.body)
+
+                        Spacer()
+
+                        if entitlementService.isAccountSignedIn {
+                            Text(entitlementService.accountEmail ?? "Not signed in")
+                                .font(.body)
+                                .foregroundStyle(.secondary)
+                        } else {
+                            Button("Sign In") {
+                                showAccountSignInSheet = true
+                            }
+                            .buttonStyle(.borderedProminent)
+                            .controlSize(.small)
+                        }
+                    }
+
+                    if entitlementService.isCheckoutActivationInProgress {
+                        HStack(spacing: 10) {
+                            ProgressView()
+                                .controlSize(.small)
+                            Text("Activating purchase…")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+
                     // License key (VIP only)
                     if entitlementService.isLicenseValid,
                        let key = KeychainService.shared.get(.licenseKey) {
@@ -241,8 +274,8 @@ struct GeneralSettingsView: View {
                     }
 
                     // Linked email (subscription only)
-                    if entitlementService.isSubscriptionActive,
-                       let email = KeychainService.shared.get(.customerEmail) {
+                    if entitlementService.isSubscriptionActive && !entitlementService.isVIPActive,
+                       let email = entitlementService.accountEmail {
                         HStack {
                             Image(systemName: "envelope")
                                 .foregroundStyle(.secondary)
@@ -259,7 +292,7 @@ struct GeneralSettingsView: View {
                         }
                     }
 
-                    if entitlementService.isSubscriptionActive,
+                    if entitlementService.isSubscriptionActive && !entitlementService.isVIPActive,
                        let renewalISO = entitlementService.subscriptionRenewalDateISO8601 {
                         HStack {
                             Image(systemName: "calendar")
@@ -277,65 +310,40 @@ struct GeneralSettingsView: View {
                         }
                     }
 
-                    // Last validated
-                    if let timestamp = KeychainService.shared.get(.entitlementLastValidatedAt) {
-                        HStack {
-                            Image(systemName: "clock")
-                                .foregroundStyle(.secondary)
-                                .frame(width: 24)
-
-                            Text("Last Validated")
-                                .font(.body)
-
-                            Spacer()
-
-                            Text(formattedValidationDate(timestamp))
-                                .font(.body)
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-
-                    // Actions
-                    if entitlementService.isLicenseValid {
-                        Divider()
-                        HStack(spacing: 12) {
-                            Button("Deactivate License", role: .destructive) {
-                                showDeactivateConfirmation = true
-                            }
-
-                            Button("Re-validate") {
-                                Task { await entitlementService.revalidate() }
-                            }
-                            .disabled(entitlementService.validationState == .validating)
-                        }
-                    } else if entitlementService.isSubscriptionActive {
-                        Divider()
-                        HStack(spacing: 12) {
-                            Button("Manage Subscription") {
-                                Task {
-                                    do {
-                                        let url = try await entitlementService.subscriptionManagementURL()
-                                        NSWorkspace.shared.open(url)
-                                    } catch {
-                                        subscriptionManagementError = error.localizedDescription
-                                    }
-                                }
-                            }
-
-                            Button("Re-validate") {
-                                Task { await entitlementService.revalidate() }
-                            }
-                            .disabled(entitlementService.validationState == .validating)
-                        }
-                    }
-
                     if entitlementService.validationState == .offline {
                         Label("Offline — using cached status", systemImage: "wifi.slash")
                             .font(.caption)
                             .foregroundStyle(.orange)
                     }
 
-                    #if DEBUG
+                    if entitlementService.isAccountSignedIn {
+                        HStack(spacing: 10) {
+                            Button("Sign Out") {
+                                Task { await entitlementService.signOutAccount() }
+                            }
+                            .buttonStyle(.bordered)
+
+                            if entitlementService.isLicenseValid {
+                                Button("Deactivate License", role: .destructive) {
+                                    showDeactivateConfirmation = true
+                                }
+                            } else if entitlementService.isSubscriptionActive && !entitlementService.isVIPActive {
+                                Button("Manage Subscription") {
+                                    Task {
+                                        do {
+                                            let url = try await entitlementService.subscriptionManagementURL()
+                                            NSWorkspace.shared.open(url)
+                                        } catch {
+                                            subscriptionManagementError = error.localizedDescription
+                                        }
+                                    }
+                                }
+                                .buttonStyle(.bordered)
+                            }
+                        }
+                    }
+
+                    #if false
                     Divider()
 
                     HStack {
@@ -404,7 +412,7 @@ struct GeneralSettingsView: View {
                     Divider()
                         .padding(.horizontal, 20)
                     
-                    // Debug Mode Toggle
+                    #if false
                     SettingsToggleRow(
                         title: "Debug Logging",
                         description: "Show detailed logs for text capture and replacement",
@@ -416,6 +424,7 @@ struct GeneralSettingsView: View {
                     )
                     .padding(.horizontal, 20)
                     .padding(.bottom, 16)
+                    #endif
                 }
                 .liquidGlass(.settingsCard)
 
@@ -523,10 +532,14 @@ struct GeneralSettingsView: View {
         } message: {
             Text(subscriptionManagementError ?? "")
         }
+        .sheet(isPresented: $showAccountSignInSheet) {
+            AccountSignInView()
+        }
     }
     
     @State private var showDeleteConfirmation = false
     @State private var showDeactivateConfirmation = false
+    @State private var showAccountSignInSheet = false
     @State private var deactivationError: String?
     @State private var dataErrorMessage: String?
     @State private var subscriptionManagementError: String?

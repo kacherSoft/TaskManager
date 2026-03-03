@@ -79,8 +79,10 @@ App gating uses `EntitlementService.hasFullAccess`.
 ### Dodo API Notes
 
 - The app uses backend-issued signed entitlement tokens (`/v1/entitlements/resolve`) for Pro/VIP restore and validation.
+- Purchases, restore, entitlement resolve, and customer portal now require account sign-in via email OTP (`/v1/auth/email/start`, `/v1/auth/email/verify`).
 - Dodo secret API keys must stay server-side (Cloudflare Worker), not in the distributed app.
 - Subscription management uses backend `POST /v1/customer-portal/session` with install-bound proof.
+- Device seat policy is enforced server-side; users can self-manage active devices in Settings (`GET /v1/devices`, `POST /v1/devices/revoke`).
 - Configure backend URLs via app Info.plist keys:
   - `STRATA_BACKEND_TEST_BASE_URL`
   - `STRATA_BACKEND_LIVE_BASE_URL`

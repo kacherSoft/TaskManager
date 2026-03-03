@@ -21,6 +21,12 @@ final class KeychainService: Sendable {
         case installRegistrationPubkeyHash = "strata.installRegistrationPubkeyHash"
         case entitlementLastValidatedAt = "strata.entitlementLastValidatedAt"
         case licenseOfflineGraceUntil = "strata.licenseOfflineGraceUntil"
+
+        // Account auth/session keys (OTP flow)
+        case accountSessionToken = "strata.accountSessionToken"
+        case accountSessionExpiresAt = "strata.accountSessionExpiresAt"
+        case accountUserId = "strata.accountUserId"
+        case accountEmail = "strata.accountEmail"
     }
     
     private init() {}

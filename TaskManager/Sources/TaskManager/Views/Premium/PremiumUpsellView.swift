@@ -7,8 +7,10 @@ struct PremiumUpsellView: View {
     @Environment(EntitlementService.self) var entitlementService
     @State private var showLicenseActivation = false
     @State private var showSubscriptionLinking = false
+    @State private var showAccountSignIn = false
     @State private var checkoutInFlight = false
     @State private var checkoutError: String?
+    @State private var pendingCheckoutProductId: String?
 
     var body: some View {
         VStack(spacing: 18) {
@@ -110,6 +112,17 @@ struct PremiumUpsellView: View {
                     .font(.caption)
             }
 
+            if !entitlementService.isAccountSignedIn {
+                Label("Sign in is required before purchase", systemImage: "person.badge.key")
+                    .font(.caption)
+                    .foregroundStyle(.orange)
+            }
+
+            if entitlementService.isCheckoutActivationInProgress {
+                ProgressView("Finalizing purchase activation…")
+                    .font(.caption)
+            }
+
             if let checkoutError {
                 Label(checkoutError, systemImage: "exclamationmark.triangle.fill")
                     .font(.caption)
@@ -142,9 +155,29 @@ struct PremiumUpsellView: View {
         .sheet(isPresented: $showSubscriptionLinking) {
             SubscriptionLinkingView()
         }
+        .sheet(isPresented: $showAccountSignIn) {
+            AccountSignInView()
+        }
+        .onChange(of: showAccountSignIn) { _, isPresented in
+            guard !isPresented, let pendingCheckoutProductId else {
+                return
+            }
+            guard entitlementService.isAccountSignedIn else {
+                self.pendingCheckoutProductId = nil
+                return
+            }
+            self.pendingCheckoutProductId = nil
+            startCheckout(for: pendingCheckoutProductId)
+        }
     }
 
     private func startCheckout(for productId: String) {
+        guard entitlementService.isAccountSignedIn else {
+            pendingCheckoutProductId = productId
+            showAccountSignIn = true
+            return
+        }
+
         checkoutInFlight = true
         checkoutError = nil
 

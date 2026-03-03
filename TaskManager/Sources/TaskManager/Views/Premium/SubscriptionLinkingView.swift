@@ -4,10 +4,10 @@ struct SubscriptionLinkingView: View {
     @Environment(EntitlementService.self) var entitlementService
     @Environment(\.dismiss) private var dismiss
 
-    @State private var email = ""
     @State private var includeLicenseKey = false
     @State private var licenseKey = ""
     @State private var restoreState: RestoreState = .idle
+    @State private var showAccountSignIn = false
 
     enum RestoreState: Equatable {
         case idle
@@ -44,23 +44,40 @@ struct SubscriptionLinkingView: View {
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
 
-            TextField("you@example.com", text: $email)
-                .textFieldStyle(.roundedBorder)
-                .frame(maxWidth: 360)
-                .disabled(restoreState == .restoring)
-                .textContentType(.emailAddress)
+            if entitlementService.isAccountSignedIn {
+                if let email = entitlementService.accountEmail {
+                    HStack(spacing: 8) {
+                        Image(systemName: "person.crop.circle.badge.checkmark")
+                            .foregroundStyle(.green)
+                        Text(email)
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            } else {
+                VStack(spacing: 8) {
+                    Label("Sign in is required before restore", systemImage: "person.badge.key")
+                        .font(.caption)
+                        .foregroundStyle(.orange)
+                    Button("Sign In") {
+                        showAccountSignIn = true
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(restoreState == .restoring)
+                }
+            }
 
             Toggle("Include VIP license key", isOn: $includeLicenseKey)
                 .toggleStyle(.switch)
                 .frame(maxWidth: 360, alignment: .leading)
-                .disabled(restoreState == .restoring)
+                .disabled(restoreState == .restoring || !entitlementService.isAccountSignedIn)
 
             if includeLicenseKey {
                 TextField("XXXX-XXXX-XXXX-XXXX", text: $licenseKey)
                     .textFieldStyle(.roundedBorder)
                     .font(.system(.body, design: .monospaced))
                     .frame(maxWidth: 360)
-                    .disabled(restoreState == .restoring)
+                    .disabled(restoreState == .restoring || !entitlementService.isAccountSignedIn)
             }
 
             switch restoreState {
@@ -89,28 +106,24 @@ struct SubscriptionLinkingView: View {
                     restore()
                 }
                 .buttonStyle(.borderedProminent)
-                .disabled(!isValidEmail || restoreState == .restoring)
+                .disabled(!entitlementService.isAccountSignedIn || restoreState == .restoring)
                 .keyboardShortcut(.return)
             }
         }
         .padding(30)
         .frame(width: 460)
-    }
-
-    private var isValidEmail: Bool {
-        let trimmed = email.trimmingCharacters(in: .whitespacesAndNewlines)
-        return trimmed.contains("@") && trimmed.contains(".")
+        .sheet(isPresented: $showAccountSignIn) {
+            AccountSignInView()
+        }
     }
 
     private func restore() {
-        let trimmedEmail = email.trimmingCharacters(in: .whitespacesAndNewlines)
         let trimmedLicenseKey = licenseKey.trimmingCharacters(in: .whitespacesAndNewlines)
         restoreState = .restoring
 
         Task {
             do {
                 let outcome = try await entitlementService.restorePurchases(
-                    email: trimmedEmail,
                     licenseKey: includeLicenseKey && !trimmedLicenseKey.isEmpty ? trimmedLicenseKey : nil
                 )
 

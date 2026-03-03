@@ -22,6 +22,9 @@ final class EntitlementService {
     private(set) var subscriptionCustomerId: String?
     private(set) var subscriptionProductId: String?
     private(set) var subscriptionRenewalDateISO8601: String?
+    private(set) var accountEmail: String?
+    private(set) var accountUserId: String?
+    private(set) var accountSessionExpiresAt: Date?
 
     var hasFullAccess: Bool {
         guard !isIntegrityCompromised else { return false }
@@ -30,6 +33,29 @@ final class EntitlementService {
 
     var isPremium: Bool { hasFullAccess }
     var isVIPPurchased: Bool { isLicenseValid }
+    var isVIPActive: Bool {
+        guard !isIntegrityCompromised else { return false }
+        if isLicenseValid { return true }
+        return isSubscriptionActive && resolvedTier == "vip"
+    }
+    var isProActive: Bool {
+        guard !isIntegrityCompromised else { return false }
+        return isSubscriptionActive && resolvedTier == "pro"
+    }
+    var isCheckoutActivationInProgress: Bool {
+        validationState == .validating
+    }
+    var isAccountSignedIn: Bool {
+        guard let token = keychain.get(.accountSessionToken)?
+            .trimmingCharacters(in: .whitespacesAndNewlines),
+              !token.isEmpty else {
+            return false
+        }
+        if let expiry = accountSessionExpiresAt {
+            return Date() < expiry
+        }
+        return true
+    }
 
     func canUse(_ feature: PremiumFeature) -> Bool { hasFullAccess }
 
@@ -58,6 +84,14 @@ final class EntitlementService {
         case subscription
         case lifetime
         case none
+    }
+
+    struct EmailAuthChallenge: Sendable {
+        let email: String
+        let challengeId: String
+        let expiresAt: Date
+        let delivery: String
+        let debugCode: String?
     }
 
     private(set) var validationState: ValidationState = .idle
@@ -97,6 +131,7 @@ final class EntitlementService {
         self.secureEnclave = secureEnclave
 
         bootstrapInstallId()
+        loadAccountSession()
         loadCachedEntitlement()
 
         Task {
@@ -116,7 +151,72 @@ final class EntitlementService {
         await revalidate()
     }
 
+    func startEmailAuth(email: String) async throws -> EmailAuthChallenge {
+        let normalizedEmail = email.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard !normalizedEmail.isEmpty else {
+            throw EntitlementError.accountEmailMissing
+        }
+
+        let response = try await backendClient.startEmailAuth(email: normalizedEmail)
+        let expiresAt = Date(timeIntervalSince1970: TimeInterval(response.expires_at))
+        return EmailAuthChallenge(
+            email: normalizedEmail,
+            challengeId: response.challenge_id,
+            expiresAt: expiresAt,
+            delivery: response.delivery,
+            debugCode: response.debug_code
+        )
+    }
+
+    func verifyEmailAuth(email: String, challengeId: String, code: String) async throws {
+        let normalizedEmail = email.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard !normalizedEmail.isEmpty else {
+            throw EntitlementError.accountEmailMissing
+        }
+
+        let response = try await backendClient.verifyEmailAuth(
+            email: normalizedEmail,
+            challengeId: challengeId,
+            code: code
+        )
+        saveAccountSession(
+            token: response.session_token,
+            userId: response.user_id,
+            email: response.email,
+            expiresAtUnix: response.session_expires_at
+        )
+
+        await revalidate()
+    }
+
+    func signOutAccount() async {
+        try? await backendClient.revokeAccountSession()
+        clearAccountSession()
+        clearLinkedSubscriptionState(deleteEmail: true)
+        await revalidate()
+    }
+
+    func listAccountDevices() async throws -> [DeviceInfo] {
+        guard isAccountSignedIn else {
+            throw EntitlementError.accountSignInRequired
+        }
+        let response = try await backendClient.listDevices()
+        return response.devices
+    }
+
+    func revokeAccountDevice(installId: String) async throws {
+        guard isAccountSignedIn else {
+            throw EntitlementError.accountSignInRequired
+        }
+        try await backendClient.revokeDevice(installId: installId)
+        if installId == self.installId {
+            clearLinkedSubscriptionState(deleteEmail: false)
+        }
+        await revalidate()
+    }
+
     func revalidate() async {
+        loadAccountSession()
         validationState = .validating
         var usedOfflineCache = false
 
@@ -188,6 +288,9 @@ final class EntitlementService {
     }
 
     func beginCheckout(productId: String) async throws -> URL {
+        guard isAccountSignedIn else {
+            throw EntitlementError.accountSignInRequired
+        }
         try await ensureInstallIdentityRegistered()
 
         let response = try await backendClient.createCheckoutSession(
@@ -204,14 +307,13 @@ final class EntitlementService {
         return url
     }
 
-    func restorePurchases(email: String, licenseKey: String?) async throws -> RestoreOutcome {
-        let normalizedEmail = email.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        guard !normalizedEmail.isEmpty else {
-            throw EntitlementError.subscriptionEmailMissing
+    func restorePurchases(licenseKey: String?) async throws -> RestoreOutcome {
+        guard isAccountSignedIn else {
+            throw EntitlementError.accountSignInRequired
         }
 
         return try await performRestorePurchases(
-            email: normalizedEmail,
+            email: accountEmail,
             licenseKey: licenseKey
         )
     }
@@ -263,13 +365,13 @@ final class EntitlementService {
     }
 
     func subscriptionManagementURL() async throws -> URL {
-        guard let email = keychain.get(.customerEmail), !email.isEmpty else {
-            throw EntitlementError.subscriptionEmailMissing
+        guard isAccountSignedIn else {
+            throw EntitlementError.accountSignInRequired
         }
 
         let proof = try await createInstallProof()
         return try await backendClient.customerPortalURL(
-            email: email,
+            email: accountEmail,
             installId: installId,
             challengeId: proof.challengeId,
             nonceSignature: proof.signature
@@ -305,11 +407,15 @@ final class EntitlementService {
         }()
 
         if shouldAttemptImmediateRestore {
+            validationState = .validating
             let didRestore = await attemptCheckoutRestore(
                 emailHint: checkoutEmail,
                 licenseKey: licenseKey
             )
             if didRestore {
+                if let licenseKey, !licenseKey.isEmpty {
+                    try? await activateLicense(key: licenseKey)
+                }
                 return
             }
         }
@@ -345,6 +451,54 @@ final class EntitlementService {
         let installPubkeyHash: String
     }
 
+    private func loadAccountSession() {
+        let email = keychain.get(.accountEmail)?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+        accountEmail = (email?.isEmpty == false) ? email : nil
+        accountUserId = keychain.get(.accountUserId)
+
+        if let encoded = keychain.get(.accountSessionExpiresAt),
+           let unix = TimeInterval(encoded) {
+            let expiry = Date(timeIntervalSince1970: unix)
+            if Date() >= expiry {
+                clearAccountSession()
+                return
+            }
+            accountSessionExpiresAt = expiry
+        } else {
+            accountSessionExpiresAt = nil
+        }
+    }
+
+    private func saveAccountSession(
+        token: String,
+        userId: String,
+        email: String,
+        expiresAtUnix: Int
+    ) {
+        let normalizedEmail = email.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        try? keychain.save(token, for: .accountSessionToken)
+        try? keychain.save(userId, for: .accountUserId)
+        try? keychain.save(normalizedEmail, for: .accountEmail)
+        try? keychain.save(String(expiresAtUnix), for: .accountSessionExpiresAt)
+
+        accountUserId = userId
+        accountEmail = normalizedEmail
+        accountSessionExpiresAt = Date(timeIntervalSince1970: TimeInterval(expiresAtUnix))
+    }
+
+    private func clearAccountSession() {
+        keychain.delete(.accountSessionToken)
+        keychain.delete(.accountUserId)
+        keychain.delete(.accountEmail)
+        keychain.delete(.accountSessionExpiresAt)
+
+        accountUserId = nil
+        accountEmail = nil
+        accountSessionExpiresAt = nil
+    }
+
     private func normalizedQueryValue(
         named name: String,
         in components: URLComponents,
@@ -374,7 +528,7 @@ final class EntitlementService {
         let normalizedEmailHint = emailHint?
             .trimmingCharacters(in: .whitespacesAndNewlines)
             .lowercased()
-        let fallbackLinkedEmail = keychain.get(.customerEmail)?
+        let fallbackLinkedEmail = accountEmail?
             .trimmingCharacters(in: .whitespacesAndNewlines)
             .lowercased()
         let candidateEmail = (normalizedEmailHint?.isEmpty == false)
@@ -523,7 +677,7 @@ final class EntitlementService {
     }
 
     private func revalidateSubscriptionPath(_ usedOfflineCache: inout Bool) async {
-        guard let email = keychain.get(.customerEmail), !email.isEmpty else {
+        guard isAccountSignedIn, let email = accountEmail, !email.isEmpty else {
             clearLinkedSubscriptionState(deleteEmail: false)
             return
         }
@@ -553,6 +707,12 @@ final class EntitlementService {
 
             saveClockCheckpoint()
         } catch {
+            if let backendError = error as? BackendError, case .authRequired = backendError {
+                clearAccountSession()
+                clearLinkedSubscriptionState(deleteEmail: false)
+                return
+            }
+
             if let backendError = error as? BackendError, backendError.isTransient,
                let cachedToken = keychain.get(.entitlementToken) {
                 do {
@@ -700,6 +860,11 @@ final class EntitlementService {
         subscriptionRenewalDateISO8601 = nil
         resolvedTier = "free"
 
+        guard isAccountSignedIn else {
+            keychain.delete(.entitlementToken)
+            return
+        }
+
         guard let cachedToken = keychain.get(.entitlementToken) else {
             return
         }
@@ -789,6 +954,8 @@ private struct ClockCheckpoint: Codable {
 enum EntitlementError: LocalizedError {
     case subscriptionNotActive
     case subscriptionEmailMissing
+    case accountSignInRequired
+    case accountEmailMissing
 
     var errorDescription: String? {
         switch self {
@@ -796,6 +963,10 @@ enum EntitlementError: LocalizedError {
             return "No active subscription found for this email"
         case .subscriptionEmailMissing:
             return "No linked subscription email found"
+        case .accountSignInRequired:
+            return "Sign in is required before restoring or purchasing"
+        case .accountEmailMissing:
+            return "Email is required"
         }
     }
 }
